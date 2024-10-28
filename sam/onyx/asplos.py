@@ -31,13 +31,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='ASPLOS argparser')
     parser.add_argument('--sam_graph',
                         type=str,
-                        default="/home/max/Documents/SPARSE/sam/compiler/sam-outputs/dot/")
+                        default="./sam/compiler/sam-outputs/dot/")
     parser.add_argument('--output_png',
                         type=str,
                         default="output.png")
     parser.add_argument('--output_graph',
                         type=str,
-                        default="/home/max/Documents/SPARSE/sam/mek.gv")
+                        default="output.gv")
     args = parser.parse_args()
 
     sam_graph = args.sam_graph

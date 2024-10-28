@@ -42,7 +42,6 @@ class SAMDotGraph():
         self.stage2_count = {}
 
         self.annotate_IO_nodes()
-        self.graph.write_png('mek.png')
         # exit()
         # print(self.graph)
 
@@ -1451,14 +1450,16 @@ def parse_graph(graph):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='SAM DOT Parser')
     parser.add_argument('--sam_graph',
+                        type=str)
+    parser.add_argument('--collat_dir',
                         type=str,
-                        default="/home/max/Documents/SPARSE/sam/compiler/sam-outputs/dot/mat_identity.gv")
+                        default="temp/")
     parser.add_argument('--output_png',
                         type=str,
                         default="output.png")
     parser.add_argument('--output_graph',
                         type=str,
-                        default="/home/max/Documents/SPARSE/sam/mek.gv")
+                        default="output.gv")
     parser.add_argument('--unroll',
                         type=int,
                         default=1)
@@ -1469,7 +1470,7 @@ if __name__ == "__main__":
     output_graph = args.output_graph
     unroll = args.unroll
     sdg = SAMDotGraph(filename=sam_graph, use_fork=True,
-                      unroll=unroll)
+                      unroll=unroll, collat_dir=args.collat_dir)
     graph = sdg.get_graph()
     print(graph)
     # parse_graph(graph)
