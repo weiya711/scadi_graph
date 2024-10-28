@@ -5,6 +5,9 @@ import numpy
 import random
 import scipy.sparse as ss
 import tempfile
+
+import torch
+
 from sam.onyx.fiber_tree import *
 import argparse
 import math
@@ -13,21 +16,23 @@ import os
 from sam.sim.test.test import *
 
 
-class MatrixGenerator():
+class MatrixGenerator:
 
     def __init__(self, name='B', shape=None, mode_ordering=None, block_size=1, block_naive=True, sparsity=0.6,
-                 format='CSF', dump_dir=None, tensor=None, value_cap=None) -> None:
+                 format='CSF', dump_dir=None, tensor=None, value_cap=None, transpose=False) -> None:
 
         # assert dimension is not None
         # self.dimension = dimension
         self.shape = shape
         self.array = None
+        self.blocked_array = None
         self.sparsity = sparsity
         self.format = format
         self.name = name
         self.mode_ordering = mode_ordering
         self.block_size = block_size
         self.block_naive = block_naive
+        self.transpose = transpose
         if value_cap is None:
             self.value_cap = int(math.pow(2, 8)) - 1
         else:
@@ -67,22 +72,17 @@ class MatrixGenerator():
         '''
         Routine to create the actual matrix from the dimension/shape
         '''
-        if self.block_size > 1:
-            # self.shape = [*self.shape[:len(self.shape) - 2], self.shape[len(self.shape) - 2] * self.block_size,
-            #               self.shape[len(self.shape) - 2] * self.block_size]
-            self.shape[len(self.shape) - 2] *= self.block_size
-            self.shape[len(self.shape) - 1] *= self.block_size
-        self.array = numpy.random.randint(low=1, high=value_cap, size=self.shape)
+        self.array = numpy.random.randint(low=0, high=value_cap, size=self.shape)
+        
         for idx, x in numpy.ndenumerate(self.array):
+            rand = random.random()
             if self.block_size > 1:
                 if (idx[-2] % self.block_size == 0) and (idx[-1]) % self.block_size == 0:
-                    if random.random() < self.sparsity:
+                    if rand < self.sparsity:
                         self.array[..., idx[-2]:idx[-2]+self.block_size, idx[-1]:idx[-1]+self.block_size] = 0
             else:
-                if random.random() < self.sparsity:
+                if rand < self.sparsity:
                     self.array[idx] = 0
-
-        # print(self.array[...,:self.shape[-2]:self.block_size,:self.shape[-1]:self.block_size])
 
     def _create_fiber_tree(self):
         # self.fiber_tree = FiberTree(tensor=self.array if self.block_naive else self.array[...,
@@ -123,16 +123,17 @@ class MatrixGenerator():
 
         print(f"Using dump directory - {use_dir}")
 
-        all_zeros = not np.any(self.array)
+        # all_zeros = not np.any(self.array, out=self.array)
+        all_zeros = False
 
         debug_coord_arr = []
         debug_seg_arr = []
         debug_val_arr = []
         # Transpose it first if necessary
-        if tpose is True:
-            self.array = numpy.transpose(self.array)
-            self.shape = self.array.shape
-            self.fiber_tree = FiberTree(tensor=self.array)
+        # if tpose is True:
+        #     self.array = numpy.transpose(self.array)
+        #     self.shape = self.array.shape
+        #     self.fiber_tree = FiberTree(tensor=self.array)
 
         if format is not None:
             self.format = format
@@ -171,18 +172,12 @@ class MatrixGenerator():
             # In CSF format, need to iteratively create seg/coord arrays
             tmp_lvl_list = []
             small_tmp_lvl_list = []
-            # if self.block_size == 1:
             tmp_lvl_list.append(self.fiber_tree.get_root())
-            # else:
-                # tmp_lvl_list.append(self.tmp_fiber_tree.get_root())
             small_tmp_lvl_list.append(self.tmp_fiber_tree.get_root())
-            # print(small_tmp_lvl_list)
-            # print(tmp_lvl_list)
 
             seg_arr, coord_arr = None, None
             if self.block_size > 1:
                 seg_arr, coord_arr = self._dump_csf(small_tmp_lvl_list)
-                # print(seg_arr, coord_arr)
             else:
                 seg_arr, coord_arr = self._dump_csf(tmp_lvl_list)
             if glb_override:
@@ -190,8 +185,6 @@ class MatrixGenerator():
                 self.write_array(lines, name=f"tensor_{self.name}_mode_{self.mode_ordering[0]}", dump_dir=use_dir,
                                  hex=print_hex)
             else:
-                print(self.mode_ordering)
-                # print(seg_arr, coord_arr)
                 self.write_array(seg_arr, name=f"tensor_{self.name}_mode_{self.mode_ordering[0]}_seg", dump_dir=use_dir,
                                  hex=print_hex)
                 self.write_array(coord_arr, name=f"tensor_{self.name}_mode_{self.mode_ordering[0]}_crd",
@@ -222,24 +215,27 @@ class MatrixGenerator():
                         # self.write_array(tmp_lvl_list, name=f"tensor_{self.name}_mode_vals" dump_dir=use_dir)
                         self.write_array(lines, name=f"tensor_{self.name}_mode_vals", dump_dir=use_dir, hex=print_hex)
                     else:
-                        reached_full_vals = False
-                        if self.block_size > 1:
-                            tmp_lst = tmp_lvl_list
-                            # Retrieve values from full tensor 
-                            while not reached_full_vals:
-                                next_tmp_lvl_list = []
-                                for fib in tmp_lst:
-                                    crd_payloads_tmp = fib.get_coord_payloads()
-                                    if type(crd_payloads_tmp[0][1]) is not FiberTreeFiber:
-                                        reached_full_vals = True
-                                        for crd, pld in crd_payloads_tmp:
-                                            next_tmp_lvl_list.append(pld)
-                                    else:
-                                        for crd, pld in crd_payloads_tmp:
-                                            next_tmp_lvl_list.append(pld)
-                                tmp_lst = next_tmp_lvl_list
-                        self.write_array(tmp_lst, name=f"tensor_{self.name}_mode_vals", dump_dir=use_dir,
-                                         hex=print_hex)
+                        # reached_full_vals = False
+                        # if self.block_size > 1:
+                        #     tmp_lst = tmp_lvl_list
+                        #     # Retrieve values from full tensor 
+                        #     while not reached_full_vals:
+                        #         next_tmp_lvl_list = []
+                        #         for fib in tmp_lst:
+                        #             crd_payloads_tmp = fib.get_coord_payloads()
+                        #             if type(crd_payloads_tmp[0][1]) is not FiberTreeFiber:
+                        #                 reached_full_vals = True
+                        #                 for crd, pld in crd_payloads_tmp:
+                        #                     next_tmp_lvl_list.append(pld)
+                        #             else:
+                        #                 for crd, pld in crd_payloads_tmp:
+                        #                     next_tmp_lvl_list.append(pld)
+                        #         tmp_lst = next_tmp_lvl_list
+                        if self.block_size == 1:
+                            self.write_array(tmp_lst, name=f"tensor_{self.name}_mode_vals", dump_dir=use_dir,
+                                            hex=print_hex)
+                        else:
+                            self.write_blocked_array(self.array, name=f"tensor_{self.name}_mode_vals", dump_dir=use_dir, skip_zeros=True)
                 else:
                     seg_arr, coord_arr = self._dump_csf(tmp_lst)
                     if glb_override:
@@ -260,7 +256,10 @@ class MatrixGenerator():
                 lines = [len(flat_array), *flat_array]
                 self.write_array(lines, name=f"tensor_{self.name}_mode_vals", dump_dir=use_dir, hex=print_hex)
             else:
-                self.write_array(flat_array, name=f"tensor_{self.name}_mode_vals", dump_dir=use_dir, hex=print_hex)
+                if self.block_size == 1:
+                    self.write_array(flat_array, name=f"tensor_{self.name}_mode_vals", dump_dir=use_dir, hex=print_hex)
+                else:
+                    self.write_blocked_array(self.array, name=f"tensor_{self.name}_mode_vals", dump_dir=use_dir)
         elif self.format == "COO":
             crd_dict = dict()
             order = len(self.array.shape)
@@ -293,8 +292,14 @@ class MatrixGenerator():
                                          hex=print_hex)
 
         if dump_shape:
-            final_shape = [x // self.block_size for x in self.array.shape]
-            self.write_array(final_shape, name=f"tensor_{self.name}_mode_shape", dump_dir=use_dir, hex=print_hex)
+            # final_shape = self.array.shape
+            final_shape = [x if i < len(self.array.shape) - 2 else x // self.block_size for i, x in enumerate(self.array.shape)]
+            # final_shape = final_shape[self.mode_ordering]
+            shape = []
+            for elem in self.mode_ordering:
+                shape.append(final_shape[elem])
+
+            self.write_array(shape, name=f"tensor_{self.name}_mode_shape", dump_dir=use_dir, hex=print_hex)
 
         # Transpose it back
         if tpose is True:
@@ -323,7 +328,7 @@ class MatrixGenerator():
 
         return seg_arr, coord_arr
 
-    def write_array(self, str_list, name, dump_dir=None, hex=False):
+    def write_array(self, str_list, name, dump_dir=None, hex=False, integer=False, num_repeats=1):
         """Write an array/list to a file
 
         Args:
@@ -336,7 +341,35 @@ class MatrixGenerator():
         full_path = dump_dir + "/" + name
         with open(full_path, "w+") as wr_file:
             for item in str_list:
-                item_int = int(item)
+                if integer:
+                    item_int = int(item)
+                else:
+                    item_int = item
+                if hex:
+                    wr_file.write(f"{item_int:04X}\n")
+                else:
+                    for _ in range(num_repeats):
+                        wr_file.write(f"{item_int}\n")
+
+    def write_blocked_array(self, str_list, name, dump_dir=None, integer=False, hex=False, skip_zeros=False):
+        if dump_dir is None:
+            dump_dir = self.dump_dir
+
+        tiles = tile_and_unroll_nd(str_list, [self.block_size, self.block_size])
+
+        if skip_zeros:
+            print("Skipping zeros")
+            tiles = [tile for tile in tiles if numpy.sum(tile) != 0]
+
+        tiles = np.concatenate(tiles)
+
+        full_path = dump_dir + "/" + name
+        with open(full_path, "w+") as wr_file:
+            for item in tiles:
+                if integer:
+                    item_int = int(item)
+                else:
+                    item_int = item
                 if hex:
                     wr_file.write(f"{item_int:04X}\n")
                 else:
@@ -359,6 +392,45 @@ class MatrixGenerator():
 
     def __setitem__(self, key, val):
         self.array[key] = val
+
+
+def tile_and_unroll_nd(array, tile_size):
+    """
+    Generalized function to tile and unroll a multidimensional array.
+
+    Parameters:
+    - array: Input numpy array of any dimensionality.
+    - tile_size: A tuple that specifies the size of the tiles for the last dimensions.
+
+    Returns:
+    - A list of flattened tiles.
+    """
+    array_shape = array.shape
+    num_non_tiled_dims = len(array_shape) - len(tile_size)  # Non-tiled dimensions
+    tiled_dims = array_shape[num_non_tiled_dims:]  # Dimensions that will be tiled
+
+    # Calculate the number of tiles along the tiling dimensions
+    tiled_sizes = [dim // tile for dim, tile in zip(tiled_dims, tile_size)]
+
+    # Prepare a list to collect the tiles
+    tiles = []
+
+    # Iterate over the non-tiled dimensions
+    for index in np.ndindex(*array_shape[:num_non_tiled_dims]):
+        # Iterate over the tiled dimensions and extract each tile
+        for tile_index in np.ndindex(*tiled_sizes):
+            # Slice the array to extract the current tile
+            slices = tuple(
+                slice(idx * size, (idx + 1) * size) for idx, size in zip(tile_index, tile_size)
+            )
+            full_slices = index + slices  # Combine non-tiled and tiled indices
+            tile = array[full_slices]
+            if type(tile) == torch.Tensor:
+                tile = tile.numpy()
+            # Flatten the tile and append to the list
+            tiles.append(tile.flatten())
+
+    return tiles
 
 
 def get_runs(v1, v2):
