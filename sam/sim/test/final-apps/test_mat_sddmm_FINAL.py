@@ -24,24 +24,24 @@ other_dir = os.getenv('OTHER_FORMATTED_PATH', default=os.path.join(cwd, 'mode-fo
 
 
 @pytest.mark.suitesparse
-def test_mat_sddmm_locate_fused(samBench, ssname, cast, check_gold, report_stats, debug_sim, backpressure,
+def test_mat_sddmm_locate_fused(samBench, ssname, cast, positive_only, check_gold, report_stats, debug_sim, backpressure,
                                 depth, KDIM=256, fill=0):
     B_dirname = os.path.join(formatted_dir, ssname, "mat_sddmm")
     B_shape_filename = os.path.join(B_dirname, "tensor_B_mode_shape")
-    B_shape = read_inputs(B_shape_filename)
+    B_shape = read_inputs(B_shape_filename, positive_only=positive_only)
 
     B0_seg_filename = os.path.join(B_dirname, "tensor_B_mode_0_seg")
-    B_seg0 = read_inputs(B0_seg_filename)
+    B_seg0 = read_inputs(B0_seg_filename, positive_only=positive_only)
     B0_crd_filename = os.path.join(B_dirname, "tensor_B_mode_0_crd")
-    B_crd0 = read_inputs(B0_crd_filename)
+    B_crd0 = read_inputs(B0_crd_filename, positive_only=positive_only)
 
     B1_seg_filename = os.path.join(B_dirname, "tensor_B_mode_1_seg")
-    B_seg1 = read_inputs(B1_seg_filename)
+    B_seg1 = read_inputs(B1_seg_filename, positive_only=positive_only)
     B1_crd_filename = os.path.join(B_dirname, "tensor_B_mode_1_crd")
-    B_crd1 = read_inputs(B1_crd_filename)
+    B_crd1 = read_inputs(B1_crd_filename, positive_only=positive_only)
 
     B_vals_filename = os.path.join(B_dirname, "tensor_B_mode_vals")
-    B_vals = read_inputs(B_vals_filename, float)
+    B_vals = read_inputs(B_vals_filename, float, positive_only=positive_only)
 
     C_shape = (B_shape[0], KDIM)
     C_vals = np.arange(math.prod(C_shape)).tolist()
@@ -262,5 +262,5 @@ def test_mat_sddmm_locate_fused(samBench, ssname, cast, check_gold, report_stats
 
     if check_gold:
         print("Checking gold...")
-        check_gold_mat_sddmm(ssname, debug_sim, cast, out_crds, out_segs, out_vals, "ss01", KDIM)
+        check_gold_mat_sddmm(ssname, debug_sim, cast, positive_only, out_crds, out_segs, out_vals, "ss01", KDIM)
     samBench(bench, extra_info)

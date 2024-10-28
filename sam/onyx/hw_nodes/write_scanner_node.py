@@ -34,18 +34,10 @@ class WriteScannerNode(HWNode):
                 'buffet_to_wr_scan': [
                     # wr op/data
                     ([(wr_scan, "data_out"), (buffet, "wr_data")], 17),
-                    # ([(wr_scan, "op_out"), (buffet, "wr_op")], 1),
-                    # ([(buffet, "wr_data_ready"), (wr_scan, "data_out_ready")], 1),
-                    # ([(wr_scan, "data_out_valid"), (buffet, "wr_data_valid")], 1),
                     # addr
                     ([(wr_scan, "addr_out"), (buffet, "wr_addr")], 17),
-                    # ([(buffet, "wr_addr_ready"), (wr_scan, "addr_out_ready")], 1),
-                    # ([(wr_scan, "addr_out_valid"), (buffet, "wr_addr_valid")], 1),
-
                     # id
                     ([(wr_scan, "ID_out"), (buffet, "wr_ID")], 17),
-                    # ([(buffet, "wr_ID_ready"), (wr_scan, "ID_out_ready")], 1),
-                    # ([(wr_scan, "ID_out_valid"), (buffet, "wr_ID_valid")], 1),
                 ]
             }
             return new_conns
@@ -77,32 +69,27 @@ class WriteScannerNode(HWNode):
             raise NotImplementedError(f'Cannot connect WriteScannerNode to {other_type}')
 
     def configure(self, attributes):
-
+        print("Write Scanner Configure", attributes)
         stop_lvl = 0
+        init_blank = 0
 
-        # compressed = int(attributes['format'] == 'compressed')
         if 'format' in attributes and 'vals' in attributes['format'].strip('"'):
             compressed = 1
         elif 'format' in attributes:
             compressed = int(attributes['format'].strip('"') == 'compressed')
-        # elif attributes['type'].strip('"') == 'arrayvals':
         else:
             compressed = 1
 
-        if 'spacc' in attributes:
-            spacc_mode = 1
-            init_blank = 1
-            assert 'stop_lvl' in attributes
-            stop_lvl = int(attributes['stop_lvl'].strip('"'))
-        else:
-            spacc_mode = 0
-            init_blank = 0
-
-        # compressed = int(attributes['format'] == 'compressed')
         if attributes['type'].strip('"') == 'arrayvals':
             lowest_level = 1
         elif attributes['mode'].strip('"') == 'vals' or attributes['format'].strip('"') == 'vals':
             lowest_level = 1
+        # for the dense scanner, we only need a single block from the GLB,
+        # the (0, dim_size) pair
+        elif attributes['format'].strip('"') == 'dense':
+            lowest_level = 1
+        # for scanners that are not dense or value, two structure is required,
+        # the segment block and the coordinate block
         else:
             lowest_level = 0
 
@@ -112,16 +99,25 @@ class WriteScannerNode(HWNode):
         else:
             block_mode = 0
 
-        # block_mode = int(attributes['type'].strip('"') == 'fiberlookup')
-        # cfg_tuple = (inner_offset, compressed, lowest_level, stop_lvl, block_mode)
-        cfg_tuple = (compressed, lowest_level, stop_lvl, block_mode, init_blank, spacc_mode)
+        if 'vector_reduce_mode' in attributes:
+            is_in_vr_mode = attributes['vector_reduce_mode'].strip('"')
+            if is_in_vr_mode == "true":
+                vr_mode = 1
+        else:
+            vr_mode = 0
+
+        stream_id = 0
+        if 'stream_id' in attributes:
+            stream_id = int(attributes['stream_id'])
+
+        cfg_tuple = (compressed, lowest_level, stop_lvl, block_mode, vr_mode, init_blank)
         cfg_kwargs = {
-            # 'inner_offset': inner_offset,
             'compressed': compressed,
             'lowest_level': lowest_level,
             'stop_lvl': stop_lvl,
             'block_mode': block_mode,
+            'vr_mode': vr_mode,
             'init_blank': init_blank,
-            'spacc_mode': spacc_mode
+            'stream_id': stream_id
         }
         return cfg_tuple, cfg_kwargs

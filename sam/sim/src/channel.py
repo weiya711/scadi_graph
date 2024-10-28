@@ -219,6 +219,7 @@ class output_memory_block():
         self.downstream_token = token
 
 
+# FIXME: Follow code style and fix class naming convention and make sure it's base is primitive...
 class memory_block():
     def __init__(self, name="B", skip_blocks=False, element_size=2, level=None, indexes=2,
                  size=1000 * 2, nbuffer=False, latency=10, debug=False, bandwidth=2,
@@ -444,8 +445,8 @@ class memory_block():
             assert len(self.tile_ptrs_fifo) == len(self.tile_ptrs_size)
             if self.done_received and len(self.tile_ptrs) > 0:  # and not self.done_processed:
                 assert self.curr_size == sum(self.tile_sizes) or \
-                       self.curr_size == (sum(self.tile_sizes) + self.load_size) or \
-                       self.curr_size == (sum(self.tile_sizes) + self.load_size + self.remove_size)
+                    self.curr_size == (sum(self.tile_sizes) + self.load_size) or \
+                    self.curr_size == (sum(self.tile_sizes) + self.load_size + self.remove_size)
                 self.outputed = False
                 self.done_processed = True
                 self.valid = False

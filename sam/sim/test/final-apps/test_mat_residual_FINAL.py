@@ -22,23 +22,23 @@ other_dir = os.getenv('OTHER_FORMATTED_PATH', default=os.path.join(cwd, 'mode-fo
 
 # FIXME: Figureout formats
 @pytest.mark.suitesparse
-def test_mat_residual(samBench, ssname, cast, check_gold, report_stats, debug_sim, backpressure, depth, fill=0):
+def test_mat_residual(samBench, ssname, cast, positive_only, check_gold, report_stats, debug_sim, backpressure, depth, fill=0):
     C_dirname = os.path.join(formatted_dir, ssname, "mat_residual")
     C_shape_filename = os.path.join(C_dirname, "tensor_C_mode_shape")
-    C_shape = read_inputs(C_shape_filename)
+    C_shape = read_inputs(C_shape_filename, positive_only=positive_only)
 
     C0_seg_filename = os.path.join(C_dirname, "tensor_C_mode_0_seg")
-    C_seg0 = read_inputs(C0_seg_filename)
+    C_seg0 = read_inputs(C0_seg_filename, positive_only=positive_only)
     C0_crd_filename = os.path.join(C_dirname, "tensor_C_mode_0_crd")
-    C_crd0 = read_inputs(C0_crd_filename)
+    C_crd0 = read_inputs(C0_crd_filename, positive_only=positive_only)
 
     C1_seg_filename = os.path.join(C_dirname, "tensor_C_mode_1_seg")
-    C_seg1 = read_inputs(C1_seg_filename)
+    C_seg1 = read_inputs(C1_seg_filename, positive_only=positive_only)
     C1_crd_filename = os.path.join(C_dirname, "tensor_C_mode_1_crd")
-    C_crd1 = read_inputs(C1_crd_filename)
+    C_crd1 = read_inputs(C1_crd_filename, positive_only=positive_only)
 
     C_vals_filename = os.path.join(C_dirname, "tensor_C_mode_vals")
-    C_vals = read_inputs(C_vals_filename, float)
+    C_vals = read_inputs(C_vals_filename, float, positive_only=positive_only)
 
     b_dirname = C_dirname
 #    b_fname = [f for f in os.listdir(b_dirname) if ssname + "-vec_mode0" in f]
@@ -48,9 +48,9 @@ def test_mat_residual(samBench, ssname, cast, check_gold, report_stats, debug_si
 
     b_shape = [C_shape[0]]
     b0_seg_filename = os.path.join(b_dirname, "tensor_b_mode_0_seg")
-    b_seg0 = read_inputs(b0_seg_filename)
+    b_seg0 = read_inputs(b0_seg_filename, positive_only=positive_only)
     b0_crd_filename = os.path.join(b_dirname, "tensor_b_mode_0_crd")
-    b_crd0 = read_inputs(b0_crd_filename)
+    b_crd0 = read_inputs(b0_crd_filename, positive_only=positive_only)
 
     b_vals_filename = os.path.join(b_dirname, "tensor_b_mode_vals")
     b_vals = read_inputs(b_vals_filename, float)
@@ -63,12 +63,12 @@ def test_mat_residual(samBench, ssname, cast, check_gold, report_stats, debug_si
 
     d_shape = [C_shape[1]]
     d0_seg_filename = os.path.join(d_dirname, "tensor_d_mode_0_seg")
-    d_seg0 = read_inputs(d0_seg_filename)
+    d_seg0 = read_inputs(d0_seg_filename, positive_only=positive_only)
     d0_crd_filename = os.path.join(d_dirname, "tensor_d_mode_0_crd")
-    d_crd0 = read_inputs(d0_crd_filename)
+    d_crd0 = read_inputs(d0_crd_filename, positive_only=positive_only)
 
     d_vals_filename = os.path.join(d_dirname, "tensor_d_mode_vals")
-    d_vals = read_inputs(d_vals_filename, float)
+    d_vals = read_inputs(d_vals_filename, float, positive_only=positive_only)
 
     C_shape0_min = min(len(b_vals) + len(C_crd0), b_shape[0])
     fiberlookup_bi_17 = CompressedCrdRdScan(crd_arr=b_crd0, seg_arr=b_seg0, debug=debug_sim, statistics=report_stats,
@@ -246,5 +246,5 @@ def test_mat_residual(samBench, ssname, cast, check_gold, report_stats, debug_si
 
     if check_gold:
         print("Checking gold...")
-        check_gold_mat_residual(ssname, debug_sim, cast, out_crds, out_segs, out_vals, "s0")
+        check_gold_mat_residual(ssname, debug_sim, cast, positive_only, out_crds, out_segs, out_vals, "s0")
     samBench(bench, extra_info)

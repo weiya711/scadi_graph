@@ -1,3 +1,5 @@
+from sam.util import SUITESPARSE_FORMATTED_PATH, ScipyTensorShifter
+from scripts.util.util import FormatWriter, SuiteSparseTensor, InputCacheSuiteSparse
 import argparse
 import os
 import shutil
@@ -6,8 +8,10 @@ import numpy as np
 
 from pathlib import Path
 
-from scripts.util.util import FormatWriter, SuiteSparseTensor, InputCacheSuiteSparse
-from sam.util import SUITESPARSE_FORMATTED_PATH, ScipyTensorShifter
+import sys
+# the mock-0.3.1 dir contains testcase.py, testutils.py & mock.py
+sys.path.append('/home/avb03/sam/scripts')
+
 
 all_formats = ["coo", "cooT", "csr", "dcsr", "dcsc", "csc", "dense", "denseT"]
 formats = ["coo", "cooT", "csr", "dcsr", "dcsc", "csc", "dense"]
@@ -29,6 +33,7 @@ def write_datastructure_tiles(args, tensor, out_path, tile_name):
 
     coo = inputCache.load(tensor, False)
     formatWriter.writeout_separate_sparse_only(coo, dirname, tensorname, format_str="ss01", hw=False)
+    # formatWriter.writeout_separate_sparse_only(coo, dirname, tensorname, format_str="ss01", hw=args.hw)
 
 
 def write_datastructure_bench(args, tensor, out_path, tiles=None):
@@ -37,6 +42,7 @@ def write_datastructure_bench(args, tensor, out_path, tiles=None):
     print("Writing " + args.name + " for test " + args.benchname + "...")
 
     dirname = args.output_dir_path if args.output_dir_path is not None else os.path.join(out_path, args.name, args.benchname)
+    print("dirname: " + dirname)
     if tiles is not None:
         dirname = os.path.join(dirname, tiles)
     dirpath = Path(dirname)
@@ -128,7 +134,8 @@ def write_datastructure_bench(args, tensor, out_path, tiles=None):
 
     elif "mat_mattransmul" in args.benchname:
         formatWriter.writeout_separate_sparse_only(coo, dirname, tensorname, format_str="ss10")
-        if not args.no_gen_other:
+        # if not args.no_gen_other:
+        if False:
             tensorname = 'd'
             vec = scipy.sparse.random(shape[0], 1, density=args.density, data_rvs=np.ones)
             vec = vec.toarray().flatten()
@@ -139,7 +146,7 @@ def write_datastructure_bench(args, tensor, out_path, tiles=None):
             vec = vec.toarray().flatten()
             formatWriter.writeout_separate_vec(vec, dirname, tensorname)
     elif "mat_vecmul" == args.benchname or "mat_vecmul_ji" in args.benchname:
-        formatWriter.writeout_separate_sparse_only(coo, dirname, tensorname, format_str="ss10")
+        formatWriter.writeout_separate_sparse_only(coo, dirname, tensorname, format_str="ss01")
         if not args.no_gen_other:
             tensorname = 'c'
             vec = scipy.sparse.random(shape[1], 1, density=args.density, data_rvs=np.ones)
@@ -184,7 +191,7 @@ parser.add_argument('--input_path', type=str, default=None)
 parser.add_argument('--output_dir_path', type=str, default=None)
 parser.add_argument('--tiles', action='store_true')
 parser.add_argument('--no_gen_other', action='store_true', help="Whether this"
-                    "script should generate the randmo 'other' tensors")
+                    "script should generate the random 'other' tensors")
 parser.add_argument('--seed', type=int, default=0, help='Random seed needed for gen_other')
 parser.add_argument('--density', type=int, default=0.25, help='If gen_other, used for density of "other" tensor')
 args = parser.parse_args()
@@ -217,7 +224,8 @@ tensor = None
 mtx_files = None
 if args.tiles:
     # get all mtx tile files from args.input_path
-    mtx_files = [os.path.join(args.input_path, fname) for fname in os.listdir(args.input_path) if fname.endswith(".mtx")]
+    # mtx_files = [os.path.join(args.input_path, fname) for fname in os.listdir(args.input_path) if fname.endswith(".mtx")]
+    mtx_files = [os.path.join(args.input_path, fname) for fname in os.listdir(args.input_path)]
 
     tensor = [SuiteSparseTensor(mtx_file) for mtx_file in mtx_files]
 elif args.input_path is not None:
@@ -249,6 +257,7 @@ elif args.combined:
         formatWriter.writeout(trans_shifted, format_str, trans_filename)
 elif args.hw:
     if args.tiles and tensor is not None:
+        print("tensor lengths = ", len(tensor))
         for i, ten in enumerate(tensor):
             tile_name = os.path.split(mtx_files[i])[1].split(".")[0]
             write_datastructure_tiles(args, ten, out_path, tile_name)

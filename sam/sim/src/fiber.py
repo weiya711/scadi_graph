@@ -1,5 +1,6 @@
 # NOT CURRENTLY USED FILE
 
+
 class FiberCoordinateLookupError(Exception):
     def __init__(self, *args: object) -> None:
         super().__init__(*args)

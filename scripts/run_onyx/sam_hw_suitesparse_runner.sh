@@ -4,11 +4,9 @@
 #SBATCH -p lanka-v3
 #SBATCH --exclusive
 
+# Command: ./scripts/sam_hw_suitesparse_runner.sh <suitesparse_names.txt> <0|1|2>
+# Where 0 = local, 1 = Lanka, 2 = kiwi/neva
 # This should be run from the sam/ directory
-
-# ./sam_hw_suitesparse_runner.sh <tensor_names.txt> <machine>
-# Arg1 <tensor_names.txt> - File with the SuiteSparse matrices to run 
-# Arg2 <machine> - Which machine is being used (0:local, 1:Lanka, 2:Kiwi/Neva)
 
 # This script:
 # 1. Formats teh matrices
@@ -18,11 +16,11 @@ set -u
 
 BENCHMARKS=(
   matmul_FINAL
-#  mat_elemadd_FINAL
-#  mat_elemadd3_FINAL
-#  mat_vecmul_FINAL
-#  mat_residual_FINAL
-#  mat_mattransmul_FINAL
+  mat_elemadd_FINAL
+  mat_elemadd3_FINAL
+  mat_vecmul_FINAL
+  mat_residual_FINAL
+  mat_mattransmul_FINAL
 )
 
 errors=()
@@ -40,6 +38,7 @@ if [ $2 -eq 1 ]; then
 	neva=OFF
 # KIWI/NEVA
 elif [ $2 -eq 2 ]; then
+	# NEVA/KIWI
 	lanka=OFF
 	neva=ON
 # Local Machine

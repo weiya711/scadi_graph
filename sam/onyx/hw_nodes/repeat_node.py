@@ -74,13 +74,10 @@ class RepeatNode(HWNode):
         elif other_type == CrdHoldNode:
             raise NotImplementedError(f'Cannot connect GLBNode to {other_type}')
         elif other_type == FiberAccessNode:
-            print("REPEAT TO FIBER ACCESS")
             assert kwargs is not None
             assert 'flavor_that' in kwargs
             that_flavor = other.get_flavor(kwargs['flavor_that'])
-            print(kwargs)
             init_conns = self.connect(that_flavor, edge)
-            print(init_conns)
             final_conns = other.remap_conns(init_conns, kwargs['flavor_that'])
             return final_conns
         else:
@@ -89,18 +86,16 @@ class RepeatNode(HWNode):
         return new_conns
 
     def configure(self, attributes):
-
+        print("Repeat Configure", attributes)
         spacc_mode = 0
         if 'spacc' in attributes:
             spacc_mode = 1
 
-        print("Repeat stop")
         root = 0
         stop_lvl = 1
         if 'true' in attributes['root'].strip('"'):
             root = 1
             stop_lvl = 0
-        print(attributes)
         cfg_kwargs = {
             'stop_lvl': stop_lvl,
             'root': root,

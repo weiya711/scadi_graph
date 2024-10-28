@@ -20,11 +20,22 @@ validate_dir = VALIDATION_OUTPUT_PATH
 tiled_output_path = os.getenv('TILED_OUTPUT_PATH', default=os.path.join(cwd, 'mode-formats'))
 
 
+def clean_data(B_tensor, cast=False, positive_only=False):
+    if positive_only:
+        data = [abs(x) for x in B_tensor.data]
+        B_tensor = scipy.sparse.csr_matrix((data, B_tensor.indices, B_tensor.indptr))
+
+    if cast:
+        data = [round_sparse(x) for x in B_tensor.data]
+        B_tensor = scipy.sparse.csr_matrix((data, B_tensor.indices, B_tensor.indptr), dtype=int)
+    return B_tensor
+
+
 def check_gold_matmul_tiled(tile_crd_b, tile_crd_c, ssname, debug_sim, out_crds, out_segs, out_val, out_format="ss01"):
     # CSR
-    gold_file_path = "out_" + str(tile_crd_b[0]) + "_" + str(tile_crd_b[1]) + "_" +\
-        str(tile_crd_c[1]) + "_" + str(tile_crd_b[2]) + "_" + str(tile_crd_b[3]) +\
-        "_" + str(tile_crd_c[3]) + ".mtx"
+    gold_file_path = "out_" + str(tile_crd_b[0]) + "_" + str(tile_crd_b[1]) + "_" + \
+                     str(tile_crd_c[1]) + "_" + str(tile_crd_b[2]) + "_" + str(tile_crd_b[3]) + \
+                     "_" + str(tile_crd_c[3]) + ".mtx"
     gold_path = os.path.join(tiled_output_path, gold_file_path)
     # print(gold_path)
     if not os.path.exists(gold_path):
@@ -72,9 +83,11 @@ def check_gold_matmul_tiled(tile_crd_b, tile_crd_c, ssname, debug_sim, out_crds,
         assert (check_point_tuple(out_tup, gold_tup))
 
 
-def check_gold_matmul(ssname, debug_sim, cast, out_crds, out_segs, out_val, out_format="ss01"):
+def check_gold_matmul(ssname, debug_sim, cast, positive_only, out_crds, out_segs, out_val, out_format="ss01"):
     # CSR
     B_tensor = scipy.io.mmread(os.path.join(ss_dir, ssname + ".mtx")).tocsr()
+    B_tensor = clean_data(B_tensor, cast, positive_only)
+
     shifter = ScipyTensorShifter()
 
     B_scipy = B_tensor
@@ -111,9 +124,7 @@ def check_gold_matmul(ssname, debug_sim, cast, out_crds, out_segs, out_val, out_
 def check_gold_mat_elemmul(ssname, debug_sim, cast, out_crds, out_segs, out_val, format_str):
     # MTX
     B_tensor = scipy.io.mmread(os.path.join(ss_dir, ssname + ".mtx")).tocsr()
-    if cast:
-        data = [round_sparse(x) for x in B_tensor.data]
-        B_tensor = scipy.sparse.csr_matrix((data, B_tensor.indices, B_tensor.indptr), dtype=int)
+    B_tensor = clean_data(B_tensor, cast)
 
     shifter = ScipyTensorShifter()
     B_scipy = B_tensor
@@ -145,12 +156,10 @@ def check_gold_mat_elemmul(ssname, debug_sim, cast, out_crds, out_segs, out_val,
         assert (check_point_tuple(out_tup, gold_tup))
 
 
-def check_gold_mat_identity(ssname, debug_sim, cast, out_crds, out_segs, out_val, format_str):
+def check_gold_mat_identity(ssname, debug_sim, cast, positive_only, out_crds, out_segs, out_val, format_str):
     # MTX
     B_tensor = scipy.io.mmread(os.path.join(ss_dir, ssname + ".mtx")).tocsr()
-    if cast:
-        data = [round_sparse(x) for x in B_tensor.data]
-        B_tensor = scipy.sparse.csr_matrix((data, B_tensor.indices, B_tensor.indptr), dtype=int)
+    B_tensor = clean_data(B_tensor, cast, positive_only)
 
     B_scipy = B_tensor
 
@@ -172,12 +181,10 @@ def check_gold_mat_identity(ssname, debug_sim, cast, out_crds, out_segs, out_val
         assert (check_point_tuple(out_tup, gold_tup))
 
 
-def check_gold_mat_elemadd(ssname, debug_sim, cast, out_crds, out_segs, out_val, format_str):
+def check_gold_mat_elemadd(ssname, debug_sim, cast, positive_only, out_crds, out_segs, out_val, format_str):
     # MTX
     B_tensor = scipy.io.mmread(os.path.join(ss_dir, ssname + ".mtx")).tocsr()
-    if cast:
-        data = [round_sparse(x) for x in B_tensor.data]
-        B_tensor = scipy.sparse.csr_matrix((data, B_tensor.indices, B_tensor.indptr), dtype=int)
+    B_tensor = clean_data(B_tensor, cast, positive_only)
 
     shifter = ScipyTensorShifter()
     B_scipy = B_tensor
@@ -206,23 +213,21 @@ def check_gold_mat_elemadd(ssname, debug_sim, cast, out_crds, out_segs, out_val,
     else:
         out_tup = convert_point_tuple(get_point_list(out_crds, out_segs, out_val))
         out_tup = remove_zeros(out_tup)
-        assert (check_point_tuple(out_tup, gold_tup))
+        assert check_point_tuple(out_tup, gold_tup), print_point_tuple(out_tup, gold_tup)
 
 
-def check_gold_mat_vecmul_ji(ssname, debug_sim, cast, out_crds, out_segs, out_val, format_str):
-    return check_gold_mat_vecmul(ssname, debug_sim, cast, out_crds, out_segs, out_val, format_str)
+def check_gold_mat_vecmul_ji(ssname, debug_sim, cast, positive_only, out_crds, out_segs, out_val, format_str):
+    return check_gold_mat_vecmul(ssname, debug_sim, cast, positive_only, out_crds, out_segs, out_val, format_str)
 
 
-def check_gold_mat_vecmul_ij(ssname, debug_sim, out_crds, out_segs, out_val, format_str):
-    return check_gold_mat_vecmul(ssname, debug_sim, False, out_crds, out_segs, out_val, format_str)
+def check_gold_mat_vecmul_ij(ssname, debug_sim, cast, positive_only, out_crds, out_segs, out_val, format_str):
+    return check_gold_mat_vecmul(ssname, debug_sim, cast, positive_only, out_crds, out_segs, out_val, format_str)
 
 
-def check_gold_mat_vecmul(ssname, debug_sim, cast, out_crds, out_segs, out_val, format_str):
+def check_gold_mat_vecmul(ssname, debug_sim, cast, positive_only, out_crds, out_segs, out_val, format_str):
     # MTX
     B_tensor = scipy.io.mmread(os.path.join(ss_dir, ssname + ".mtx")).tocsr()
-    if cast:
-        data = [round_sparse(x) for x in B_tensor.data]
-        B_tensor = scipy.sparse.csr_matrix((data, B_tensor.indices, B_tensor.indptr), dtype=int)
+    B_tensor = clean_data(B_tensor, cast, positive_only)
 
     c_dirname = os.path.join(ss_formatted_dir, ssname, "mat_vecmul")
     c_shape = B_tensor.shape[1]
@@ -267,12 +272,10 @@ def check_gold_mat_vecmul(ssname, debug_sim, cast, out_crds, out_segs, out_val, 
         assert (check_point_tuple(out_tup, gold_tup))
 
 
-def check_gold_mat_sddmm(ssname, debug_sim, cast, out_crds, out_segs, out_val, format_str, KDIM=256):
+def check_gold_mat_sddmm(ssname, debug_sim, cast, positive_only, out_crds, out_segs, out_val, format_str, KDIM=256):
     # MTX
     B_tensor = scipy.io.mmread(os.path.join(ss_dir, ssname + ".mtx")).tocsr()
-    if cast:
-        data = [round_sparse(x) for x in B_tensor.data]
-        B_tensor = scipy.sparse.csr_matrix((data, B_tensor.indices, B_tensor.indptr), dtype=int)
+    B_tensor = clean_data(B_tensor, cast, positive_only)
 
     B_shape = B_tensor.shape
     C_shape = (B_shape[0], KDIM)
@@ -312,12 +315,10 @@ def check_gold_mat_sddmm(ssname, debug_sim, cast, out_crds, out_segs, out_val, f
         assert (check_point_tuple(out_tup, gold_tup))
 
 
-def check_gold_mat_residual(ssname, debug_sim, cast, out_crds, out_segs, out_val, format_str):
+def check_gold_mat_residual(ssname, debug_sim, cast, positive_only, out_crds, out_segs, out_val, format_str):
     # MTX
     C_tensor = scipy.io.mmread(os.path.join(ss_dir, ssname + ".mtx")).tocsr()
-    if cast:
-        data = [round_sparse(x) for x in C_tensor.data]
-        C_tensor = scipy.sparse.csr_matrix((data, C_tensor.indices, C_tensor.indptr), dtype=int)
+    C_tensor = clean_data(C_tensor, cast, positive_only)
 
     b_dirname = os.path.join(ss_formatted_dir, ssname, "mat_residual")
     b_shape = C_tensor.shape[0]
@@ -376,12 +377,10 @@ def check_gold_mat_residual(ssname, debug_sim, cast, out_crds, out_segs, out_val
         assert (check_point_tuple(out_tup, gold_tup))
 
 
-def check_gold_mat_mattransmul(ssname, debug_sim, cast, out_crds, out_segs, out_val, format_str):
+def check_gold_mat_mattransmul(ssname, debug_sim, cast, positive_only, out_crds, out_segs, out_val, format_str):
     # MTX
     C_tensor = scipy.io.mmread(os.path.join(ss_dir, ssname + ".mtx")).tocsr()
-    if cast:
-        data = [round_sparse(x) for x in C_tensor.data]
-        C_tensor = scipy.sparse.csr_matrix((data, C_tensor.indices, C_tensor.indptr), dtype=int)
+    C_tensor = clean_data(C_tensor, cast, positive_only)
 
     d_dirname = os.path.join(ss_formatted_dir, ssname, "mat_mattransmul")
     d_shape = C_tensor.shape[0]
@@ -443,12 +442,10 @@ def check_gold_mat_mattransmul(ssname, debug_sim, cast, out_crds, out_segs, out_
         assert (check_point_tuple(out_tup, gold_tup))
 
 
-def check_gold_mat_elemadd3(ssname, debug_sim, cast, out_crds, out_segs, out_val, format_str):
+def check_gold_mat_elemadd3(ssname, debug_sim, cast, positive_only, out_crds, out_segs, out_val, format_str):
     # MTX
     B_tensor = scipy.io.mmread(os.path.join(ss_dir, ssname + ".mtx")).tocsr()
-    if cast:
-        data = [round_sparse(x) for x in B_tensor.data]
-        B_tensor = scipy.sparse.csr_matrix((data, B_tensor.indices, B_tensor.indptr), dtype=int)
+    B_tensor = clean_data(B_tensor, cast, positive_only)
 
     shifter = ScipyTensorShifter()
     B_scipy = B_tensor

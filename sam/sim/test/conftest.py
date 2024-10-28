@@ -19,7 +19,7 @@ def pytest_addoption(parser):
                      help="Flag that enables functional output checking")
     parser.addoption("--skip-empty", action="store_true", default=False,
                      help="Flag that enables functional output checking")
-    parser.addoption("--yaml_name", type=str, default="memory_config.yaml",
+    parser.addoption("--yaml-name", type=str, default="memory_config.yaml",
                      help="Name of yaml file for tiling memory configuration")
     parser.addoption("--nbuffer", action="store_true", default=False,
                      help="If nbuffering is enabled")
@@ -33,7 +33,11 @@ def pytest_addoption(parser):
                      help="nnz value for stats")
     parser.addoption("--cast", action="store_true", default=False,
                      help="Flag that runs all simulations using integer input "
-                          "and output data (used for hardware simulation comparison)")
+                          "and output data (used for hardware simulation comparison, "
+                          "when data is formatted with the '-cast' flag)")
+    parser.addoption("--positive-only", action="store_true", default=False,
+                     help="Flag that casts all inputs to positive values only "
+                          "(used for hardware simulation comparison)")
 
 
 def pytest_configure(config):
@@ -141,12 +145,17 @@ def synth(request):
 
 @pytest.fixture
 def yaml_name(request):
-    return request.config.getoption("--yaml_name")
+    return request.config.getoption("--yaml-name")
 
 
 @pytest.fixture
 def cast(request):
     return request.config.getoption("--cast")
+
+
+@pytest.fixture
+def positive_only(request):
+    return request.config.getoption("--positive-only")
 
 
 @pytest.fixture

@@ -21,23 +21,24 @@ other_dir = os.getenv('OTHER_FORMATTED_PATH', default=os.path.join(cwd, 'mode-fo
 
 
 @pytest.mark.suitesparse
-def test_mat_vecmul_FINAL(samBench, ssname, cast, check_gold, report_stats, debug_sim, backpressure, depth, fill=0):
+def test_mat_vecmul_FINAL(samBench, ssname, cast, positive_only, check_gold, report_stats, debug_sim, backpressure,
+                          depth, fill=0):
     B_dirname = os.path.join(formatted_dir, ssname, "mat_vecmul")
     B_shape_filename = os.path.join(B_dirname, "tensor_B_mode_shape")
-    B_shape = read_inputs(B_shape_filename)
+    B_shape = read_inputs(B_shape_filename, positive_only=positive_only)
 
     B0_seg_filename = os.path.join(B_dirname, "tensor_B_mode_0_seg")
-    B_seg0 = read_inputs(B0_seg_filename)
+    B_seg0 = read_inputs(B0_seg_filename, positive_only=positive_only)
     B0_crd_filename = os.path.join(B_dirname, "tensor_B_mode_0_crd")
-    B_crd0 = read_inputs(B0_crd_filename)
+    B_crd0 = read_inputs(B0_crd_filename, positive_only=positive_only)
 
     B1_seg_filename = os.path.join(B_dirname, "tensor_B_mode_1_seg")
-    B_seg1 = read_inputs(B1_seg_filename)
+    B_seg1 = read_inputs(B1_seg_filename, positive_only=positive_only)
     B1_crd_filename = os.path.join(B_dirname, "tensor_B_mode_1_crd")
-    B_crd1 = read_inputs(B1_crd_filename)
+    B_crd1 = read_inputs(B1_crd_filename, positive_only=positive_only)
 
     B_vals_filename = os.path.join(B_dirname, "tensor_B_mode_vals")
-    B_vals = read_inputs(B_vals_filename, float)
+    B_vals = read_inputs(B_vals_filename, float, positive_only=positive_only)
 
     c_dirname = B_dirname
 #    c_fname = [f for f in os.listdir(c_dirname) if ssname + "-vec_mode1" in f]
@@ -46,15 +47,15 @@ def test_mat_vecmul_FINAL(samBench, ssname, cast, check_gold, report_stats, debu
 #    c_dirname = os.path.join(c_dirname, c_fname)
 
     c_shape_filename = os.path.join(c_dirname, "tensor_c_mode_shape")
-    c_shape = read_inputs(c_shape_filename)
+    c_shape = read_inputs(c_shape_filename, positive_only=positive_only)
 
     c0_seg_filename = os.path.join(c_dirname, "tensor_c_mode_0_seg")
-    c_seg0 = read_inputs(c0_seg_filename)
+    c_seg0 = read_inputs(c0_seg_filename, positive_only=positive_only)
     c0_crd_filename = os.path.join(c_dirname, "tensor_c_mode_0_crd")
-    c_crd0 = read_inputs(c0_crd_filename)
+    c_crd0 = read_inputs(c0_crd_filename, positive_only=positive_only)
 
     c_vals_filename = os.path.join(c_dirname, "tensor_c_mode_vals")
-    c_vals = read_inputs(c_vals_filename, float)
+    c_vals = read_inputs(c_vals_filename, float, positive_only=positive_only)
 
     # THIS IS FOR SIZE INFO
     Bs_dirname = B_dirname
@@ -254,5 +255,5 @@ def test_mat_vecmul_FINAL(samBench, ssname, cast, check_gold, report_stats, debu
 
     if check_gold:
         print("Checking gold...")
-        check_gold_mat_vecmul_ji(ssname, debug_sim, cast, out_crds, out_segs, out_vals, "s0")
+        check_gold_mat_vecmul_ji(ssname, debug_sim, cast, positive_only, out_crds, out_segs, out_vals, "s0")
     samBench(bench, extra_info)

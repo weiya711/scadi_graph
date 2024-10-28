@@ -3,10 +3,11 @@ from sam.onyx.hw_nodes.hw_node import *
 
 
 class MergeNode(HWNode):
-    def __init__(self, name=None, outer=None, inner=None) -> None:
+    def __init__(self, name=None, outer=None, inner=None, mode=None) -> None:
         super().__init__(name=name)
         self.outer = outer
         self.inner = inner
+        self.mode = mode
 
     def get_outer(self):
         return self.outer
@@ -32,6 +33,7 @@ class MergeNode(HWNode):
         from sam.onyx.hw_nodes.repsiggen_node import RepSigGenNode
         from sam.onyx.hw_nodes.crdhold_node import CrdHoldNode
         from sam.onyx.hw_nodes.fiberaccess_node import FiberAccessNode
+        from sam.onyx.hw_nodes.pass_through_node import PassThroughNode
 
         new_conns = None
         other_type = type(other)
@@ -48,25 +50,35 @@ class MergeNode(HWNode):
             wr_scan = other.get_name()
             conn = 0
             comment = edge.get_attributes()['comment'].strip('"')
-            print("MERGE TO WR SCAN")
-            print(comment)
             if 'outer' in comment:
                 conn = 1
-            print(conn)
             new_conns = {
                 f'merge_{conn}_to_wr_scan': [
-                    ([(merge, f"cmrg_coord_out_{conn}"), (wr_scan, f"data_in")], 17),
-                    # ([(merge, f"cmrg_eos_out_{conn}"), (wr_scan, f"eos_in_0")], 1),
-                    # ([(wr_scan, f"ready_out_0"), (merge, f"cmrg_ready_in_{conn}")], 1),
-                    # ([(merge, f"cmrg_valid_out_{conn}"), (wr_scan, f"valid_in_0")], 1),
+                    ([(merge, f"coord_out_{conn}"), (wr_scan, f"data_in")], 17),
                 ]
             }
 
             return new_conns
         elif other_type == IntersectNode:
-            raise NotImplementedError(f'Cannot connect MergeNode to {other_type}')
+            isect = other.get_name()
+            new_conns = {
+                f'merge_to_union_inner': [
+                    ([(merge, f"coord_out_{0}"), (isect, f"coord_in_{0}")], 17),
+                ]
+            }
+
+            return new_conns
+            # raise NotImplementedError(f'Cannot connect MergeNode to {other_type}')
         elif other_type == ReduceNode:
-            raise NotImplementedError(f'Cannot connect MergeNode to {other_type}')
+            # raise NotImplementedError(f'Cannot connect MergeNode to {other_type}')
+            other_red = other.get_name()
+            new_conns = {
+                f'merge_to_reduce_inner': [
+                    ([(merge, f"coord_out_{0}"), (other_red, f"reduce_data_in")], 17),
+                ]
+            }
+
+            return new_conns
         elif other_type == LookupNode:
             raise NotImplementedError(f'Cannot connect MergeNode to {other_type}')
         elif other_type == MergeNode:
@@ -88,13 +100,28 @@ class MergeNode(HWNode):
 
             new_conns = {
                 f'merger_to_merger_{out_conn}_to_{in_conn}': [
-                    # Send isect row and isect col to merger inside isect_col
-                    ([(merge, f"cmrg_coord_out_{out_conn}"), (other_merge, f"cmrg_coord_in_{in_conn}")], 17),
-                    # ([(isect, "eos_out_0"), (merge, f"cmrg_eos_in_{conn}")], 1),
-                    # ([(merge, f"cmrg_ready_out_{conn}"), (isect, "ready_in_0")], 1),
-                    # ([(isect, "valid_out_0"), (merge, f"cmrg_valid_in_{conn}")], 1),
+                    ([(merge, f"coord_out_{out_conn}"), (other_merge, f"coord_in_{in_conn}")], 17),
                 ]
             }
+            return new_conns
+        elif other_type == PassThroughNode:
+            pass_through = other.get_name()
+            # Use inner to process outer
+            comment = edge.get_attributes()['comment'].strip('"')
+            tensor_lvl = None
+            if self.get_inner() in comment:
+                out_conn = 0
+                tensor_lvl = self.get_inner()
+            else:
+                out_conn = 1
+                tensor_lvl = self.get_outer()
+
+            new_conns = {
+                f'merger_to_merger_{out_conn}_to_pass_through': [
+                    ([(merge, f"coord_out_{out_conn}"), (pass_through, "stream_in")], 17),
+                ]
+            }
+            return new_conns
 
         elif other_type == RepeatNode:
             raise NotImplementedError(f'Cannot connect MergeNode to {other_type}')
@@ -107,13 +134,10 @@ class MergeNode(HWNode):
         elif other_type == CrdHoldNode:
             raise NotImplementedError(f'Cannot connect MergeNode to {other_type}')
         elif other_type == FiberAccessNode:
-            print("MERGE TO FIBER ACCESS")
             assert kwargs is not None
             assert 'flavor_that' in kwargs
             that_flavor = other.get_flavor(kwargs['flavor_that'])
-            print(kwargs)
             init_conns = self.connect(that_flavor, edge)
-            print(init_conns)
             final_conns = other.remap_conns(init_conns, kwargs['flavor_that'])
             return final_conns
         else:
@@ -122,13 +146,17 @@ class MergeNode(HWNode):
         return new_conns
 
     def configure(self, attributes):
+        print("MERGE Configure", attributes)
         cmrg_enable = 1
         # TODO what is this supposed to be?
         cmrg_stop_lvl = 1
         op = 0
+        # 0 for compression, 1 for crddrop
+        cmrg_mode = self.mode
         cfg_kwargs = {
             'cmrg_enable': cmrg_enable,
             'cmrg_stop_lvl': cmrg_stop_lvl,
-            'op': op
+            'op': op,
+            'cmrg_mode': cmrg_mode
         }
-        return (cmrg_enable, cmrg_stop_lvl, op), cfg_kwargs
+        return (cmrg_enable, cmrg_stop_lvl, op, cmrg_mode), cfg_kwargs

@@ -1,28 +1,27 @@
-import scipy.sparse
-import scipy.io
-import os
 import glob
-import numpy
 import itertools
-import shutil
-import numpy as np
 import math
-import sparse
-
-from pathlib import Path
-from dataclasses import dataclass
-
 import os
-import math
+import shutil
+from dataclasses import dataclass
+from pathlib import Path
+
 import numpy
+import numpy as np
+import scipy.io
+import scipy.sparse
+import sparse
+import struct
 
 # All environment variables for SAM should live here or in make file
 cwd = os.getcwd()
-SAM_HOME = os.getenv('HOSTNAME', default=cwd)
+SAM_HOME = os.getenv('SAM_HOME', default=cwd)
 HOSTNAME = os.getenv('HOSTNAME', default="local")
 SUITESPARSE_PATH = os.getenv('SUITESPARSE_PATH', default=os.path.join(SAM_HOME, "data", "suitesparse"))
 SUITESPARSE_FORMATTED_PATH = os.getenv('SUITESPARSE_FORMATTED_PATH', default=os.path.join(SAM_HOME, "data",
                                                                                           "suitesparse-formatted"))
+SPARSEML_PATH = os.getenv('SPARSE_ML_PATH', default=os.path.join(SAM_HOME, "data", "sparseml"))
+SPARSEML_PATH_FORMATTED = os.getenv('SPARSE_ML_PATH_FORMATTED', default=os.path.join(SAM_HOME, "data", "sparseml-formatted"))
 FROSTT_PATH = os.getenv('FROSTT_PATH', default=os.path.join(SAM_HOME, "data", "frostt"))
 VALIDATION_OUTPUT_PATH = os.getenv('VALIDATION_OUTPUT_PATH', default=os.path.join(SAM_HOME, "data", "gold"))
 
@@ -38,6 +37,72 @@ def safeCastScipyTensorToInts(tensor):
         #     data[i] = int(tensor.data[i])
         data[i] = round_sparse(tensor.data[i])
     return scipy.sparse.coo_matrix(tensor.coords, data, tensor.shape)
+
+
+# TODO: this function is duplicated multiple times across aha repository
+# and should be moved to a common location
+def bfbin2float(bfstr):
+    sign = bfstr[0]
+    exp = bfstr[1:9]
+    lfrac = bfstr[9:16]
+    if sign == "0" and exp == "11111111" and lfrac != "0000000":
+        return float('nan')
+    elif sign == "1" and exp == "11111111" and lfrac != "0000000":
+        return -float('nan')
+    elif sign == "0" and exp == "11111111" and lfrac == "0000000":
+        return float('inf')
+    elif sign == "1" and exp == "11111111" and lfrac == "0000000":
+        return -float('inf')
+    elif sign == "0" and exp == "00000000" and lfrac == "0000000":
+        return float(0)
+    elif sign == "1" and exp == "00000000" and lfrac == "0000000":
+        return -float(0)
+    else:
+        mult = 1
+        if sign == "1":
+            mult = -1
+        nexp = int(exp, 2) - 127
+        if exp != 0:
+            lfrac = "1" + lfrac
+        else:
+            lfrac = "0" + lfrac
+        nfrac = int(lfrac, 2)
+        return mult * nfrac * (2 ** (nexp - 7))
+
+
+# TODO: this function is duplicated multiple times across aha repository
+# and should be moved to a common location
+def float2bfbin(fnum):
+    if fnum == "NaN":
+        sign = "0"
+        exp = "11111111"
+        lfrac = "11111111"
+    elif fnum == "-NaN":
+        sign = "1"
+        exp = "11111111"
+        lfrac = "11111111"
+    elif fnum == "Inf" or fnum > 3.402823466e+38:
+        sign = "0"
+        exp = "11111111"
+        lfrac = "00000000"
+    elif fnum == "-Inf" or fnum < -3.402823466e+38:
+        sign = "1"
+        exp = "11111111"
+        lfrac = "00000000"
+    else:
+        fstr = "".join("{:08b}".format(elem) for elem in struct.pack("!f", fnum))
+        sign = fstr[0]
+        exp = fstr[1:9]
+        lfrac = "0" + fstr[9:16]
+        hfrac = fstr[16:]
+        # Enable rounding
+        if (hfrac[0] == "1" and (hfrac[1] == "1" or hfrac[2] == "1")) or (lfrac[7] == "1" and hfrac[0] == "1"):
+            # bit 8 of the float mantissa is set, so round up
+            if lfrac[1:8] == "1111111":  # roll over mantissa and increase exp if needed
+                exp = "{:08b}".format((int(exp, 2) + 1))  # exp overflow?
+            lfrac = "{:08b}".format((int(lfrac, 2) + 1))
+
+    return sign + exp + lfrac[1:8]
 
 
 # ScipyTensorShifter shifts all elements in the last mode
@@ -69,7 +134,20 @@ def round_sparse(x):
         return math.ceil(x - 0.5)
 
 
+def constructOtherVecKey(tensorName, variant, sparsity=0.001):
+    path = os.getenv('TACO_TENSOR_PATH')
+    return f"{path}/{tensorName}-vec_{variant}-{sparsity}.tns"
+
+
+def constructOtherMatKey(tensorName, variant, sparsity=0.001):
+    path = os.getenv('TACO_TENSOR_PATH')
+    filename = f"{path}/{tensorName}-mat_{variant}*"
+    dirlist = glob.glob(filename)
+    return dirlist[0]
+
 # TnsFileLoader loads a tensor stored in .tns format.
+
+
 class TnsFileLoader:
     def __init__(self, cast_int=False):
         self.cast = cast_int
@@ -142,53 +220,59 @@ class ScipySparseTensorLoader:
 
 
 # PydataSparseTensorLoader loads a sparse tensor from a file into
-# a sparse tensor.
-# class PydataSparseTensorLoader:
-#     def __init__(self):
-#         self.loader = TnsFileLoader()
-#
-#     def load(self, path):
-#         dims, coords, values = self.loader.load(path)
-#         return sparse.COO(coords, values, tuple(dims))
-#
-# # PydataSparseTensorDumper dumps a sparse tensor to a the desired file.
-# class PydataSparseTensorDumper:
-#     def __init__(self):
-#         self.dumper = TnsFileDumper()
-#
-#     def dump(self, tensor, path):
-#         self.dumper.dump_dict_to_file(tensor.shape, sparse.DOK(tensor).data, path)
+# a pydata.sparse tensor.
+class PydataSparseTensorLoader:
+    def __init__(self):
+        self.loader = TnsFileLoader()
+
+    def load(self, path):
+        dims, coords, values = self.loader.load(path)
+        return sparse.COO(coords, values, tuple(dims))
+
+
+# PydataSparseTensorDumper dumps a sparse tensor to a the desired file.
+class PydataSparseTensorDumper:
+    def __init__(self):
+        self.dumper = TnsFileDumper()
+
+    def dump(self, tensor, path, write_shape=False):
+        assert isinstance(tensor, sparse.DOK), "The tensor needs to be a pydata/sparse DOK format"
+        self.dumper.dump_dict_to_file(tensor.shape, tensor.data, path, write_shape)
+
+
 #
 #
 #
 # # PydataTensorShifter shifts all elements in the last mode
 # # of the input pydata/sparse tensor by one.
-# class PydataTensorShifter:
-#     def __init__(self):
-#         pass
-#
-#     def shiftLastMode(self, tensor):
-#         coords = tensor.coords
-#         data = tensor.data
-#         resultCoords = []
-#         for j in range(len(tensor.shape)):
-#             resultCoords.append([0] * len(data))
-#         resultValues = [0] * len(data)
-#         for i in range(len(data)):
-#             for j in range(len(tensor.shape)):
-#                 resultCoords[j][i] = coords[j][i]
-#             # resultValues[i] = data[i]
-#             # TODO (rohany): Temporarily use a constant as the value.
-#             resultValues[i] = 2
-#             # For order 2 tensors, always shift the last coordinate. Otherwise, shift only coordinates
-#             # that have even last coordinates. This ensures that there is at least some overlap
-#             # between the original tensor and its shifted counter part.
-#             if len(tensor.shape) <= 2 or resultCoords[-1][i] % 2 == 0:
-#                 resultCoords[-1][i] = (resultCoords[-1][i] + 1) % tensor.shape[-1]
-#         return sparse.COO(resultCoords, resultValues, tensor.shape)
+class PydataTensorShifter:
+    def __init__(self):
+        pass
+
+    def shiftLastMode(self, tensor):
+        coords = tensor.coords
+        data = tensor.data
+        resultCoords = []
+        for j in range(len(tensor.shape)):
+            resultCoords.append([0] * len(data))
+        resultValues = [0] * len(data)
+        for i in range(len(data)):
+            for j in range(len(tensor.shape)):
+                resultCoords[j][i] = coords[j][i]
+            # resultValues[i] = data[i]
+            # TODO (rohany): Temporarily use a constant as the value.
+            resultValues[i] = 2
+            # For order 2 tensors, always shift the last coordinate. Otherwise, shift only coordinates
+            # that have even last coordinates. This ensures that there is at least some overlap
+            # between the original tensor and its shifted counter part.
+            if len(tensor.shape) <= 2 or resultCoords[-1][i] % 2 == 0:
+                resultCoords[-1][i] = (resultCoords[-1][i] + 1) % tensor.shape[-1]
+        return sparse.COO(resultCoords, resultValues, tensor.shape)
 
 # ScipyTensorShifter shifts all elements in the last mode
 # of the input scipy/sparse tensor by one.
+
+
 class ScipyTensorShifter:
     def __init__(self):
         pass
@@ -207,12 +291,13 @@ class ScipyTensorShifter:
 
 @dataclass
 class DoublyCompressedMatrix:
-    shape: (int)
-    seg0: [int]
-    crd0: [int]
-    seg1: [int]
-    crd1: [int]
-    data: [float]
+    # shape: (int)
+    shape = [int]
+    seg0 = [int]
+    crd0 = [int]
+    seg1 = [int]
+    crd1 = [int]
+    data = [float]
 
 
 # ScipyMatrixMarketTensorLoader loads tensors in the matrix market format
@@ -223,6 +308,20 @@ class ScipyMatrixMarketTensorLoader:
 
     def load(self, path):
         coo = scipy.io.mmread(path)
+        return coo
+
+
+class NumpyNPYArrayLoader:
+    def __init__(self):
+        pass
+
+    def load(self, path):
+        np_array = numpy.load(path)
+        if (np_array.dtype == numpy.dtype('S16')):
+            input_fp_array = numpy.empty_like(np_array, dtype=numpy.float32)
+            for idx, val in numpy.ndenumerate(np_array):
+                input_fp_array[idx] = bfbin2float(str(val).split("'")[1])
+        coo = scipy.sparse.coo_array(input_fp_array)
         return coo
 
 
@@ -262,6 +361,25 @@ class InputCacheSuiteSparse:
             if cast:
                 self.tensor = self.lastLoaded
                 # self.tensor = safeCastPydataTensorToInts(self.lastLoaded)
+            else:
+                self.tensor = self.lastLoaded
+            return self.tensor
+
+
+class InputCacheSparseML:
+    def __init__(self):
+        self.lastLoaded = None
+        self.lastName = None
+        self.tensor = None
+
+    def load(self, tensor, cast):
+        if self.lastName == str(tensor):
+            return self.tensor
+        else:
+            self.lastLoaded = tensor.load(NumpyNPYArrayLoader())
+            self.lastName = str(tensor)
+            if cast:
+                self.tensor = self.lastLoaded
             else:
                 self.tensor = self.lastLoaded
             return self.tensor
@@ -533,7 +651,7 @@ class InputCacheTensor:
         self.lastName = None
         self.tensor = None
 
-    def load(self, tensor, suiteSparse, cast, format_str):
+    def load(self, tensor, cast):
         if self.lastName == str(tensor):
             return self.tensor
         else:
@@ -546,8 +664,22 @@ class InputCacheTensor:
             return self.tensor
 
 
+# FrosttTensor represents a tensor in the FROSTT dataset.
+class FrosttTensor:
+    def __init__(self, path):
+        self.path = path
+        self.__name__ = self.__str__()
+
+    def __str__(self):
+        f = os.path.split(self.path)[1]
+        return f.replace(".tns", "")
+
+    def load(self):
+        return PydataSparseTensorLoader().load(self.path)
+
+
 # PydataMatrixMarketTensorLoader loads tensors in the matrix market format
-# into sparse matrices.
+# into pydata.sparse matrices.
 # class PydataMatrixMarketTensorLoader:
 #     def __init__(self):
 #         pass
@@ -565,6 +697,19 @@ class SuiteSparseTensor:
     def __str__(self):
         f = os.path.split(self.path)[1]
         return f.replace(".mtx", "")
+
+    def load(self, loader):
+        return loader.load(self.path)
+
+
+class SparseMLTensor:
+    def __init__(self, path):
+        self.path = path
+        self.__name__ = self.__str__()
+
+    def __str__(self):
+        f = os.path.split(self.path)[1]
+        return f.replace(".npy", "")
 
     def load(self, loader):
         return loader.load(self.path)

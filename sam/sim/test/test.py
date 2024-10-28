@@ -192,9 +192,23 @@ def check_point_tuple(pt_tup1, pt_tup2, err=1e-12):
     for i in range(len(tup1)):
         if tup1[i] != tup2[i]:
             if abs(tup1[i][-1] - tup2[i][-1]) > max(abs(tup1[i][-1]) * err, err):
-                print(str(i) + ":", tup1[i], "!=", )
+                print(str(i) + ":", tup1[i], "!=", tup2[i])
+                # print(tup1)
+                # print(tup2)
                 return False
     return True
+
+
+# Given two array of struct format point lists,
+# make sure they are equivalent
+def print_point_tuple(out_pt_tup, gold_pt_tup, err=1e-12):
+    tup1 = sorted(out_pt_tup)
+    tup2 = sorted(gold_pt_tup)
+
+    for i in range(len(tup1)):
+        if tup1[i] != tup2[i]:
+            if abs(tup1[i][-1] - tup2[i][-1]) > max(abs(tup1[i][-1]) * err, err):
+                print(str(i) + ":", tup1[i], "!=", tup2[i])
 
 
 def convert_point_tuple_ndarr(pt_tup, dim=4):
@@ -248,7 +262,7 @@ def read_combined_inputs(filename, formatlist):
     return return_list
 
 
-def read_inputs(filename, intype=int, base=10, early_terminate=None):
+def read_inputs(filename, intype=int, base=10, early_terminate=None, positive_only=False):
     return_list = []
     with open(filename) as f:
         for line in f:
@@ -256,9 +270,16 @@ def read_inputs(filename, intype=int, base=10, early_terminate=None):
                 if early_terminate in line:
                     break
             if base == 16:
-                return_list.append(intype(line, base))
+                return_list.append(int(line, base))
             else:
-                return_list.append(intype(line))
+                # Convert to positive if needed?
+                if positive_only:
+                    temp_token = intype(float(line.strip()))
+                    if temp_token < 0:
+                        temp_token = temp_token * -1
+                else:
+                    temp_token = intype(float(line.strip()))
+                return_list.append(temp_token)
     return return_list
 
 

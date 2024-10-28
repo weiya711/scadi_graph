@@ -49,6 +49,13 @@ suitesparse-bench/
 sam-outputs/
 compiler/benchmark/
 
+# Generated SAM simulator tests
+*/sim/test/apps/test_*.py
+
+# Tensor files
+*.mtx
+*.tns
+
 # Temporary or generated tensor directories 
 tmp_mat*/
 tiles/

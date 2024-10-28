@@ -33,7 +33,6 @@ n3c4-b3
 Ragusa16
 Trefethen_20
 football
-n4c6-b1
 ch5-5-b1
 ex5
 klein-b2

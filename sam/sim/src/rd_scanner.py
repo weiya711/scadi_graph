@@ -139,6 +139,16 @@ class UncompressCrdRdScan(CrdRdScan):
                         self.curr_ref = 'D'
                         self.done = True
                         return
+                    elif is_stkn(self.curr_in_ref):
+                        stkn = increment_stkn(self.curr_in_ref)
+                        self.curr_crd = stkn
+                        self.curr_ref = stkn
+                        return
+                    elif is_0tkn(self.curr_in_ref):
+                        self.curr_crd = ''
+                        self.curr_ref = ''
+                        self.emit_tkn = True
+                        return
                     else:
                         self.curr_crd = 0
                         self.curr_ref = self.curr_crd + (self.curr_in_ref * self.meta_dim)
@@ -609,6 +619,429 @@ class CompressedCrdRdScan(CrdRdScan):
                       "\n skip in:", self.curr_skip, "\t skip processed", self.skip_processed, "\t prev crd:",
                       self.prev_crd,
                       "\n Out stkn cnt:", self.out_stkn_cnt, "\t Skip stkn cnt:", self.skip_stkn_cnt, self.done)
+            # # Debugging print statements
+            # if self.debug:
+            #    print("DEBUG: C RD SCAN:"
+            #          "\n \t"
+            #          "name: ", self.name, "\t ref", len(self.in_ref), " :: ", self.in_ref,
+            #          "\t Curr crd:", self.curr_crd, "\t curr ref:", self.curr_ref,
+            #          "\n curr addr:", self.curr_addr, "\t start addr:", self.start_addr, "\t stop addr:", self.stop_addr,
+            #          "\n end fiber:", self.end_fiber, "\t curr input:", curr_in_ref,
+            #          "\n skip in:", self.curr_skip, "\t skip processed", self.skip_processed, "\t prev crd:",
+            #          self.prev_crd,
+            #          "\n emit_fiber_stkn:", self.emit_fiber_stkn,
+            #          "\n Out stkn cnt:", self.out_stkn_cnt, "\t Skip stkn cnt:", self.skip_stkn_cnt)
+
+    def set_crd_skip(self, in_crd, parent=None):
+        assert in_crd is None or is_valid_crd(in_crd)
+        if in_crd != '' and in_crd is not None:
+            if is_stkn(in_crd):
+                idx = last_stkn(self.in_crd_skip)
+                if idx is not None:
+                    # Flush coordinates
+                    self.in_crd_skip = self.in_crd_skip[:idx + 1]
+            self.in_crd_skip.append(in_crd)
+        if self.backpressure_en and parent != "":
+            parent.set_backpressure(self.fifo_avail)
+
+
+class VirtualBuffer():
+
+    def __init__(self,
+                 depth) -> None:
+        self._fifo = list()
+        self.depth = depth
+
+    def full(self):
+        return len(self._fifo) == self.depth
+
+    def empty(self):
+        return len(self._fifo) == 0
+
+    def valid(self):
+        if not self.empty():
+            timestamp = self._fifo[0][1]
+            if timestamp is None:
+                return True
+            else:
+                return timestamp == 0
+        else:
+            return False
+
+    def data(self):
+        if self.empty():
+            return 0
+        else:
+            return self._fifo[0][0]
+
+    def time(self):
+        if self.empty():
+            return None
+        else:
+            return self._fifo[0][1]
+
+    def push(self, data, time=None):
+
+        use_time = 1
+
+        if time is not None:
+            assert time >= 1
+            use_time = time
+
+        self._fifo.append((data, use_time))
+
+    def pop(self):
+        self._fifo.pop(0)
+
+    def tick(self):
+
+        for idx, (data, time) in enumerate(self._fifo):
+            if time is not None:
+                if time != 0:
+                    self._fifo[idx] = (data, time - 1)
+
+    def __str__(self) -> str:
+        return str(self._fifo)
+
+
+class CompressedCrdRdScanModel(CrdRdScan):
+    def __init__(self, crd_arr=[], seg_arr=[], skip=True, depth=1, tile_size=None, fifo=None, **kwargs):
+        super().__init__(**kwargs)
+
+        if tile_size is not None:
+            assert len(crd_arr) < tile_size
+
+        # Used for skip list
+        self.skip = skip
+        self.in_crd_skip = []
+        self.curr_skip = None
+        self.skip_processed = True
+        self.prev_crd = 0
+        # [Olivia]: I think this is needed to make sure we are looking at the correct fiber
+
+        self.crd_arr = crd_arr
+        self.seg_arr = seg_arr
+        self.start_addr = 0
+        self.stop_addr = 0
+
+        # self.curr_addr = None
+        self.curr_addr = 0
+
+        self.end_fiber = False
+        self.curr_ref = ''
+        self.curr_crd = ''
+        self.emit_fiber_stkn = False
+        self.meta_clen = len(crd_arr)
+        self.meta_slen = len(seg_arr)
+
+        self.emit_fiber_stkn = False
+        self.fresh_fiber = True
+
+        self._seg_vb0 = VirtualBuffer(8)
+        self._seg_vb1 = VirtualBuffer(8)
+        self._crd_vb = VirtualBuffer(8)
+        self._ref_vb = VirtualBuffer(8)
+
+        self.pop_out_crd = False
+        self.pop_out_ref = False
+
+        self.all_vbs = [self._seg_vb0, self._seg_vb1, self._crd_vb, self._ref_vb]
+
+        # Statistics
+        if self.get_stats:
+            self.unique_refs = []
+            # self.unique_crds = []
+            self.total_outputs = 0
+            self.elements_skipped = 0
+            self.skip_cnt = 0
+            self.intersection_behind_cnt = 0
+            self.fiber_behind_cnt = 0
+            self.stop_count = 0
+            self.empty_tkn_cnt = 0
+        self.skip_stkn_cnt = 0  # also used as a statistic
+        self.out_stkn_cnt = 0
+
+        self.begin = True
+        if self.backpressure_en:
+            self.depth = depth
+            self.data_valid = True
+            self.fifo_avail = True
+            self.ready_backpressure = True
+        if fifo is not None:
+            self.set_fifo(fifo)
+
+    def reinitialize_arrs(self, seg_arr, crd_arr, fifo):
+        # assert False
+        self.start_addr = 0
+        self.stop_addr = 0
+        self.end_fiber = False
+        # self.curr_ref = ''
+        # self.curr_crd = ''
+        self.emit_fiber_stkn = False
+        self.meta_clen = len(crd_arr)
+        self.meta_slen = len(seg_arr)
+        self.skip_stkn_cnt = 0
+        self.out_stkn_cnt = 0
+        # self.begin = True
+        self.seg_arr = seg_arr
+        self.crd_arr = crd_arr
+        print(fifo)
+        for a_ in fifo:
+            print(self.in_ref)
+            self.in_ref.append(a_)
+
+        # if fifo is not None:
+        #     self.set_fifo(fifo)
+        # assert False
+        self.done = False
+        # print("+++++++++")
+        return
+
+    def set_fifo(self, fifo):
+        for a in fifo:
+            self.in_ref.append(a)
+        return
+
+    def get_fifo(self):
+        return self.in_ref
+
+    def fifo_available(self, br=""):
+        if self.backpressure_en and len(self.in_ref) > self.depth:
+            return False
+        return True
+
+    def set_in_ref(self, in_ref, parent=None):
+        if in_ref != '' and in_ref is not None:
+            self.in_ref.append(in_ref)
+        if self.backpressure_en and parent != "":
+            parent.set_backpressure(self.fifo_avail)
+
+    def out_ref(self, child=None):
+        # if self.backpressure_en and self.data_valid:
+        if self.backpressure_en and self._ref_vb.valid() and self._crd_vb.valid():
+            # return self.curr_ref
+            self.pop_out_ref = True
+            return self._ref_vb.data()
+        elif self.backpressure_en:
+            return
+        if not self.backpressure_en:
+            # return self.curr_ref
+            # if self._ref_vb.valid():
+            if self._crd_vb.valid() and self._ref_vb.valid():
+                dat_ret = self._ref_vb.data()
+                self.pop_out_ref = True
+                # self._ref_vb.pop()
+                return dat_ret
+            else:
+                return
+
+    def out_crd(self, child=None):
+        # if self.backpressure_en and self.data_valid:
+        if self.backpressure_en and self._crd_vb.valid() and self._ref_vb.valid():
+            # return self.curr_crd
+            self.pop_out_crd = True
+            return self._crd_vb.data()
+        elif self.backpressure_en:
+            return
+        if not self.backpressure_en:
+            # return self.curr_crd
+            # return self._crd_vb.data()
+            # if self._crd_vb.valid():
+            if self._crd_vb.valid() and self._ref_vb.valid():
+                dat_ret = self._crd_vb.data()
+                # self._crd_vb.pop()
+                self.pop_out_crd = True
+                return dat_ret
+            else:
+                return
+
+    def _emit_stkn_code(self):
+        self.end_fiber = True
+
+        if len(self.in_ref) > 0:
+            next_in = self.in_ref[0]
+            if is_stkn(next_in):
+                self.in_ref.pop(0)
+                stkn = increment_stkn(next_in)
+            else:
+                stkn = 'S0'
+            self.emit_fiber_stkn = False
+        else:
+            self.emit_fiber_stkn = True
+            stkn = ''
+        self.curr_crd = stkn
+        self.curr_ref = stkn
+        self.curr_addr = None
+        self.stop_addr = 0
+        self.start_addr = 0
+
+    def _set_curr(self):
+        self.curr_ref = self.curr_addr
+        self.curr_crd = self.crd_arr[self.curr_addr]
+        if self.get_stats:
+            # if self.curr_ref not in self.unique_refs:
+            #    self.unique_refs.append(self.curr_ref)
+            # if self.curr_crd not in self.unique_crds:
+            #    self.unique_crds.append(self.curr_crd)
+            self.total_outputs += 1
+
+    def return_statistics(self):
+        if self.get_stats:
+            dic = {"total_size": len(self.crd_arr), "outputs_by_block": self.total_outputs,
+                   "unique_refs": len(self.unique_refs),
+                   "skip_list_fifo": len(self.in_crd_skip), "total_elements_skipped": self.elements_skipped,
+                   "total_skips_encountered": self.skip_cnt, "intersection_behind_rd": self.intersection_behind_cnt,
+                   "intersection_behind_fiber": self.fiber_behind_cnt, "stop_tokens": self.stop_count,
+                   "skip_stp_tkn_cnt": self.skip_stkn_cnt}
+            dic.update(super().return_statistics())
+        else:
+            dic = {}
+        return dic
+
+    def check_backpressure(self):
+        if self.backpressure_en:
+            copy_backpressure = self.ready_backpressure
+            self.ready_backpressure = True
+            return copy_backpressure
+        return True
+
+    def update(self):
+        self.update_done()
+        self.update_ready()
+
+        # if len(self.in_ref) > 0:
+
+        input_valid = len(self.in_ref) > 0
+        # Basically if we have already emitted something, we know we should either emit S0 or increment stop token
+        if input_valid:
+            next_in = self.in_ref[0]
+
+            # If stop token, we increment and push the stop token if there is room
+            if is_stkn(next_in):
+                # self.in_ref.pop(0)
+                stkn = increment_stkn(next_in)
+                if (not self._seg_vb0.full()) and (not self._seg_vb1.full()):
+                    self._seg_vb0.push((stkn, 1))
+                    self._seg_vb1.push((stkn, 1))
+                    self.in_ref.pop(0)
+                    self.emit_fiber_stkn = False
+            elif next_in == 'D' and not self.emit_fiber_stkn:
+                # Basically in the done phase if we are not emitting something from before
+                if (not self._seg_vb0.full()) and (not self._seg_vb1.full()):
+                    self._seg_vb0.push(('D', 1))
+                    self._seg_vb1.push(('D', 1))
+                    self.in_ref.pop(0)
+                    self.emit_fiber_stkn = False
+            else:
+                # If input is valid not stop token, we want to spend this cycle forwarding the S0 if we marked that
+                stkn = 'S0'
+                # Emit the stkn if we need to
+                if self.emit_fiber_stkn and (not self._seg_vb0.full()) and (not self._seg_vb1.full()):
+                    self._seg_vb0.push((stkn, 1))
+                    self._seg_vb1.push((stkn, 1))
+                    self.emit_fiber_stkn = False
+                # Otherwise, make our two requests and put them in the seg vbs
+                elif (not self._seg_vb0.full()) and (not self._seg_vb1.full()):
+                    self._seg_vb0.push((self.seg_arr[next_in], 0), 5)
+                    self._seg_vb1.push((self.seg_arr[next_in + 1], 0), 6)
+                    self.emit_fiber_stkn = True
+                    self.in_ref.pop(0)
+
+        # Now check if the seg vbs are valid
+        if self._seg_vb0.valid() and self._seg_vb1.valid():
+            # If it is a stop token, we pass it through if room
+            if (self._seg_vb0.data()[1] == 1) and (not self._crd_vb.full()) and (not self._ref_vb.full()):
+                data_to_pass = self._seg_vb0.data()[0]
+                self._crd_vb.push(data_to_pass)
+                self._ref_vb.push(data_to_pass)
+                self._seg_vb0.pop()
+                self._seg_vb1.pop()
+                self.fresh_fiber = True
+            # Otherwise, go through the fiber
+            else:
+                if self.fresh_fiber:
+                    self.curr_addr = self._seg_vb0.data()[0]
+                    self.fresh_fiber = False
+                # Only make movement if there is reservation room
+                if (not self._crd_vb.full()) and (not self._ref_vb.full()):
+                    self._crd_vb.push(self.crd_arr[self.curr_addr], 6)
+                    self._ref_vb.push(self.curr_addr)
+                    # Increase the addr, if it is equal to the bound, we can
+                    # pop it, set fresh fiber to True
+                    self.curr_addr += 1
+                    if self.curr_addr == self._seg_vb1.data()[0]:
+                        self._seg_vb0.pop()
+                        self._seg_vb1.pop()
+                        self.fresh_fiber = True
+
+        # Update the vbs
+        for vb in self.all_vbs:
+            vb.tick()
+
+        print(f'seg_vb0: {self._seg_vb0}')
+        print(f'seg_vb1: {self._seg_vb1}')
+        print(f'crd_vb: {self._crd_vb}')
+        print(f'ref_vb: {self._ref_vb}')
+        print(f'seg_vb0 valid: {self._seg_vb0.valid()}')
+        print(f'seg_vb1 valid: {self._seg_vb1.valid()}')
+        print(f'crd_vb valid: {self._crd_vb.valid()}')
+        print(f'ref_vb valid: {self._ref_vb.valid()}')
+        print(self.curr_addr)
+        # print(self.data_valid)
+        print(self.backpressure_en)
+
+        if self.pop_out_ref:
+            self._ref_vb.pop()
+            self.pop_out_ref = False
+
+        if self.pop_out_crd:
+            self._crd_vb.pop()
+            self.pop_out_crd = False
+
+        # Debugging print statements
+        if self.debug and self.backpressure_en:
+            print("DEBUG: C RD SCAN:"
+                  "\n \t"
+                  "name: ", self.name, "\t ref", len(self.in_ref), " :: ", self.in_ref,
+                  "\t Curr crd:", self.curr_crd, "\t curr ref:", self.curr_ref,
+                  "\n curr addr:", self.curr_addr, "\t start addr:", self.start_addr, "\t stop addr:", self.stop_addr,
+                  "\n end fiber:", self.end_fiber, "\t curr input:", curr_in_ref,
+                  "\n skip in:", self.curr_skip, "\t skip processed", self.skip_processed, "\t prev crd:",
+                  self.prev_crd,
+                  "\n Out stkn cnt:", self.out_stkn_cnt, "\t Skip stkn cnt:", self.skip_stkn_cnt, "\t Bakcpressure: ",
+                  self.check_backpressure(), "\t backpressure_len: ",
+                  self.data_valid, self.done)
+        elif self.debug:
+            print("DEBUG: C RD SCAN:"
+                  "\n \t"
+                  "name: ", self.name, "\t ref", len(self.in_ref), " :: ", self.in_ref,
+                  "\t Curr crd:", self.curr_crd, "\t curr ref:", self.curr_ref,
+                  "\n curr addr:", self.curr_addr, "\t start addr:", self.start_addr, "\t stop addr:", self.stop_addr,
+                  "\n end fiber:", self.end_fiber, "\t curr input:", curr_in_ref,
+                  "\n skip in:", self.curr_skip, "\t skip processed", self.skip_processed, "\t prev crd:",
+                  self.prev_crd,
+                  "\n Out stkn cnt:", self.out_stkn_cnt, "\t Skip stkn cnt:", self.skip_stkn_cnt, self.done)
+    # else:
+        # Debugging print statements
+        if self.debug and self.backpressure_en:
+            print("DEBUG: C RD SCAN:"
+                  "\n \t"
+                  "name: ", self.name, "\t ref", len(self.in_ref), " :: ", self.in_ref,
+                  "\t Curr crd:", self.curr_crd, "\t curr ref:", self.curr_ref,
+                  "\n curr addr:", self.curr_addr, "\t start addr:", self.start_addr, "\t stop addr:", self.stop_addr,
+                  "\n skip in:", self.curr_skip, "\t skip processed", self.skip_processed, "\t prev crd:",
+                  self.prev_crd,
+                  "\n Out stkn cnt:", self.out_stkn_cnt, "\t Skip stkn cnt:", self.skip_stkn_cnt, "\t Bakcpressure: ",
+                  self.data_valid)
+        elif self.debug:
+            print("DEBUG: C RD SCAN:"
+                  "\n \t"
+                  "name: ", self.name, "\t ref", len(self.in_ref), " :: ", self.in_ref,
+                  "\t Curr crd:", self.curr_crd, "\t curr ref:", self.curr_ref,
+                  "\n curr addr:", self.curr_addr, "\t start addr:", self.start_addr, "\t stop addr:", self.stop_addr,
+                  "\n skip in:", self.curr_skip, "\t skip processed", self.skip_processed, "\t prev crd:",
+                  self.prev_crd,
+                  "\n Out stkn cnt:", self.out_stkn_cnt, "\t Skip stkn cnt:", self.skip_stkn_cnt, self.done)
             # # Debugging print statements
             # if self.debug:
             #    print("DEBUG: C RD SCAN:"

@@ -3,7 +3,7 @@ from sam.onyx.hw_nodes.hw_node import *
 
 class GLBNode(HWNode):
     def __init__(self, name=None, data=None, valid=None, ready=None,
-                 direction=None, num_blocks=None, file_number=None, tx_size=None, IO_id=0,
+                 direction=None, num_blocks=None, seg_mode=None, file_number=None, tx_size=None, IO_id=0,
                  bespoke=False, tensor=None, mode=None, format=None) -> None:
         super().__init__(name=name)
 
@@ -12,6 +12,7 @@ class GLBNode(HWNode):
         self.ready = ready
         self.direction = direction
         self.num_blocks = num_blocks
+        self.seg_mode = seg_mode
         self.file_number = file_number
         self.tx_size = tx_size
         self.IO_id = IO_id
@@ -36,6 +37,9 @@ class GLBNode(HWNode):
 
     def get_num_blocks(self):
         return self.num_blocks
+
+    def get_seg_mode(self):
+        return self.seg_mode
 
     def get_data(self):
         return self.data
@@ -74,6 +78,7 @@ class GLBNode(HWNode):
         from sam.onyx.hw_nodes.repsiggen_node import RepSigGenNode
         from sam.onyx.hw_nodes.crdhold_node import CrdHoldNode
         from sam.onyx.hw_nodes.fiberaccess_node import FiberAccessNode
+        from sam.onyx.hw_nodes.pass_through_node import PassThroughNode
 
         other_type = type(other)
 
@@ -115,11 +120,17 @@ class GLBNode(HWNode):
             # Only could be using the write scanner portion of the fiber access
             # fa = other.get_name()
             conns_original = self.connect(other.get_write_scanner(), edge=edge)
-            print(conns_original)
             conns_remapped = other.remap_conns(conns_original, "write_scanner")
-            print(conns_remapped)
 
             return conns_remapped
+        elif other_type == PassThroughNode:
+            pass_through = other.get_name()
+            new_conns = {
+                'glb_to_pass_through': [
+                    ([(self.data, "io2f_17"), (pass_through, "stream_in")], 17),
+                ]
+            }
+            return new_conns
 
         else:
             raise NotImplementedError(f'Cannot connect GLBNode to {other_type}')

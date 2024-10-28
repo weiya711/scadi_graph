@@ -20,40 +20,41 @@ formatted_dir = os.getenv('SUITESPARSE_FORMATTED_PATH', default=os.path.join(cwd
 
 
 @pytest.mark.suitesparse
-def test_mat_elemadd3_FINAL(samBench, ssname, cast, check_gold, report_stats, debug_sim, backpressure, depth, fill=0):
+def test_mat_elemadd3_FINAL(samBench, ssname, cast, positive_only, check_gold, report_stats, debug_sim, backpressure,
+                            depth, fill=0):
     B_dirname = os.path.join(formatted_dir, ssname, "mat_elemadd3")
     B_shape_filename = os.path.join(B_dirname, "tensor_B_mode_shape")
-    B_shape = read_inputs(B_shape_filename)
+    B_shape = read_inputs(B_shape_filename, positive_only=positive_only)
 
     B0_seg_filename = os.path.join(B_dirname, "tensor_B_mode_0_seg")
-    B_seg0 = read_inputs(B0_seg_filename)
+    B_seg0 = read_inputs(B0_seg_filename, positive_only=positive_only)
     B0_crd_filename = os.path.join(B_dirname, "tensor_B_mode_0_crd")
-    B_crd0 = read_inputs(B0_crd_filename)
+    B_crd0 = read_inputs(B0_crd_filename, positive_only=positive_only)
 
     B1_seg_filename = os.path.join(B_dirname, "tensor_B_mode_1_seg")
-    B_seg1 = read_inputs(B1_seg_filename)
+    B_seg1 = read_inputs(B1_seg_filename, positive_only=positive_only)
     B1_crd_filename = os.path.join(B_dirname, "tensor_B_mode_1_crd")
-    B_crd1 = read_inputs(B1_crd_filename)
+    B_crd1 = read_inputs(B1_crd_filename, positive_only=positive_only)
 
     B_vals_filename = os.path.join(B_dirname, "tensor_B_mode_vals")
-    B_vals = read_inputs(B_vals_filename, float)
+    B_vals = read_inputs(B_vals_filename, float, positive_only=positive_only)
 
     C_dirname = B_dirname
     C_shape_filename = os.path.join(C_dirname, "tensor_C_mode_shape")
-    C_shape = read_inputs(C_shape_filename)
+    C_shape = read_inputs(C_shape_filename, positive_only=positive_only)
 
     C0_seg_filename = os.path.join(C_dirname, "tensor_C_mode_0_seg")
-    C_seg0 = read_inputs(C0_seg_filename)
+    C_seg0 = read_inputs(C0_seg_filename, positive_only=positive_only)
     C0_crd_filename = os.path.join(C_dirname, "tensor_C_mode_0_crd")
-    C_crd0 = read_inputs(C0_crd_filename)
+    C_crd0 = read_inputs(C0_crd_filename, positive_only=positive_only)
 
     C1_seg_filename = os.path.join(C_dirname, "tensor_C_mode_1_seg")
-    C_seg1 = read_inputs(C1_seg_filename)
+    C_seg1 = read_inputs(C1_seg_filename, positive_only=positive_only)
     C1_crd_filename = os.path.join(C_dirname, "tensor_C_mode_1_crd")
-    C_crd1 = read_inputs(C1_crd_filename)
+    C_crd1 = read_inputs(C1_crd_filename, positive_only=positive_only)
 
     C_vals_filename = os.path.join(C_dirname, "tensor_C_mode_vals")
-    C_vals = read_inputs(C_vals_filename, float)
+    C_vals = read_inputs(C_vals_filename, float, positive_only=positive_only)
 
     D_shape = C_shape
 
@@ -80,7 +81,8 @@ def test_mat_elemadd3_FINAL(samBench, ssname, cast, check_gold, report_stats, de
     unioni1_12 = Union2(debug=debug_sim, statistics=report_stats, back_en=backpressure, depth=int(depth))
     unioni2_12 = Union2(debug=debug_sim, statistics=report_stats, back_en=backpressure, depth=int(depth))
     unioni3_12 = Union2(debug=debug_sim, statistics=report_stats, back_en=backpressure, depth=int(depth))
-    fiberwrite_X0_2 = CompressWrScan(seg_size=2, size=3 * len(B_crd0), fill=fill, debug=debug_sim, statistics=report_stats,
+    fiberwrite_X0_2 = CompressWrScan(seg_size=2, size=3 * len(B_crd0), fill=fill, debug=debug_sim,
+                                     statistics=report_stats,
                                      back_en=backpressure, depth=int(depth))
     fiberlookup_Bj_9 = CompressedCrdRdScan(crd_arr=B_crd1, seg_arr=B_seg1, debug=debug_sim, statistics=report_stats,
                                            back_en=backpressure, depth=int(depth))
@@ -92,10 +94,14 @@ def test_mat_elemadd3_FINAL(samBench, ssname, cast, check_gold, report_stats, de
     unionj2_8 = Union2(debug=debug_sim, statistics=report_stats, back_en=backpressure, depth=int(depth))
     unionj3_8 = Union2(debug=debug_sim, statistics=report_stats, back_en=backpressure, depth=int(depth))
     fiberwrite_X1_1 = CompressWrScan(seg_size=3 * len(B_crd0) + 1, size=3 * len(B_vals), fill=fill,
-                                     debug=debug_sim, statistics=report_stats, back_en=backpressure, depth=int(depth))
-    arrayvals_B_5 = Array(init_arr=B_vals, debug=debug_sim, statistics=report_stats, back_en=backpressure, depth=int(depth))
-    arrayvals_C_6 = Array(init_arr=C_vals, debug=debug_sim, statistics=report_stats, back_en=backpressure, depth=int(depth))
-    arrayvals_D_7 = Array(init_arr=D_vals, debug=debug_sim, statistics=report_stats, back_en=backpressure, depth=int(depth))
+                                     debug=debug_sim, statistics=report_stats, back_en=backpressure,
+                                     depth=int(depth))
+    arrayvals_B_5 = Array(init_arr=B_vals, debug=debug_sim, statistics=report_stats, back_en=backpressure,
+                          depth=int(depth))
+    arrayvals_C_6 = Array(init_arr=C_vals, debug=debug_sim, statistics=report_stats, back_en=backpressure,
+                          depth=int(depth))
+    arrayvals_D_7 = Array(init_arr=D_vals, debug=debug_sim, statistics=report_stats, back_en=backpressure,
+                          depth=int(depth))
     add_4 = Add2(debug=debug_sim, statistics=report_stats, back_en=backpressure, depth=int(depth))
     add_3 = Add2(debug=debug_sim, statistics=report_stats, back_en=backpressure, depth=int(depth))
     fiberwrite_Xvals_0 = ValsWrScan(size=3 * len(B_vals), fill=fill, debug=debug_sim, statistics=report_stats,
@@ -299,5 +305,5 @@ def test_mat_elemadd3_FINAL(samBench, ssname, cast, check_gold, report_stats, de
 
     if check_gold:
         print("Checking gold...")
-        check_gold_mat_elemadd3(ssname, debug_sim, cast, out_crds, out_segs, out_vals, "ss01")
+        check_gold_mat_elemadd3(ssname, debug_sim, cast, positive_only, out_crds, out_segs, out_vals, "ss01")
     samBench(bench, extra_info)

@@ -38,7 +38,6 @@ class FiberTree():
         return self.root_fiber
 
     def populate_fiber(self, fiber, sub_tensor):
-
         # Last level detection
         if len(sub_tensor.shape) == 1:
             # Finally have just a row, this is the base case...(could be a scalar)
@@ -92,7 +91,7 @@ class FiberTree():
 if __name__ == "__main__":
     random.seed(10)
     numpy.random.seed(10)
-    mg = MatrixGenerator(name='B', shape=[10, 10], dump_dir='/home/max/Documents/SPARSE/sam/OUTPUTS_DUMP', sparsity=0.8)
+    mg = MatrixGenerator(name='B', shape=[10, 10], dump_dir='./OUTPUTS_DUMP', sparsity=0.8)
     array = mg.get_matrix()
     print(array)
     ft = FiberTree(tensor=array)

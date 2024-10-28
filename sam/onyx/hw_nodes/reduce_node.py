@@ -1,4 +1,8 @@
 from sam.onyx.hw_nodes.hw_node import *
+from peak.assembler import Assembler
+from hwtypes.modifiers import strip_modifiers
+from lassen.sim import PE_fc as lassen_fc
+import lassen.asm as asm
 
 
 class ReduceNode(HWNode):
@@ -39,7 +43,7 @@ class ReduceNode(HWNode):
             new_conns = {
                 'reduce_to_wr_scan': [
                     # send output to rd scanner
-                    ([(red, "data_out"), (wr_scan, "data_in")], 17),
+                    ([(red, "reduce_data_out"), (wr_scan, "data_in")], 17),
                     # ([(red, "eos_out"), (wr_scan, "eos_in_0")], 1),
                     # ([(wr_scan, "ready_out_0"), (red, "ready_in")], 1),
                     # ([(red, "valid_out"), (wr_scan, "valid_in_0")], 1),
@@ -53,7 +57,7 @@ class ReduceNode(HWNode):
             new_conns = {
                 'reduce_to_reduce': [
                     # send output to rd scanner
-                    ([(red, "data_out"), (other_red, "data_in")], 17),
+                    ([(red, "reduce_data_out"), (other_red, "reduce_data_in")], 17),
                     # ([(red, "eos_out"), (wr_scan, "eos_in_0")], 1),
                     # ([(wr_scan, "ready_out_0"), (red, "ready_in")], 1),
                     # ([(red, "valid_out"), (wr_scan, "valid_in_0")], 1),
@@ -68,14 +72,10 @@ class ReduceNode(HWNode):
             raise NotImplementedError(f'Cannot connect ReduceNode to {other_type}')
         elif other_type == ComputeNode:
             pe = other.get_name()
-            other_conn = other.get_num_inputs()
+            other_conn = other.mapped_input_ports[other.get_num_inputs()]
             new_conns = {
                 f'reduce_to_pe_{other_conn}': [
-                    # send output to rd scanner
-                    ([(red, "data_out"), (pe, f"data{other_conn}")], 17),
-                    # ([(red, "eos_out"), (wr_scan, "eos_in_0")], 1),
-                    # ([(wr_scan, "ready_out_0"), (red, "ready_in")], 1),
-                    # ([(red, "valid_out"), (wr_scan, "valid_in_0")], 1),
+                    ([(red, "reduce_data_out"), (pe, f"data{other_conn}")], 17),
                 ]
             }
             other.update_input_connections()
@@ -87,22 +87,44 @@ class ReduceNode(HWNode):
         elif other_type == CrdHoldNode:
             raise NotImplementedError(f'Cannot connect GLBNode to {other_type}')
         elif other_type == FiberAccessNode:
-            print("REDUCE TO FIBER ACCESS")
             assert kwargs is not None
             assert 'flavor_that' in kwargs
             that_flavor = other.get_flavor(kwargs['flavor_that'])
-            print(kwargs)
             init_conns = self.connect(that_flavor, edge)
-            print(init_conns)
             final_conns = other.remap_conns(init_conns, kwargs['flavor_that'])
             return final_conns
         else:
             raise NotImplementedError(f'Cannot connect ReduceNode to {other_type}')
 
     def configure(self, attributes):
+        print("Reduce Configure", attributes)
         # TODO
         stop_lvl = 2
+        # bypassing the fifos in the pe, get result in a single cycle
+        pe_only = False
+        # configuring both the pe and the reduce
+        pe_connected_to_reduce = True
+        # data I/O to and from the PE should be internal with the reduce
+        pe_in_external = 0
+        # op is set to integer add for the PE TODO: make this configurable in the sam graph
+        # TODO: make this use the metamapper
+        instr_type = strip_modifiers(lassen_fc.Py.input_t.field_dict['inst'])
+        asm_ = Assembler(instr_type)
+
+        if 'fp' in attributes:
+            is_fp = attributes['fp'].strip('"')
+            if (is_fp == 'true'):
+                op = int(asm_.assemble(asm.fp_add()))
+            else:
+                op = int(asm_.assemble(asm.add()))
+        else:
+            op = int(asm_.assemble(asm.add()))
+
         cfg_kwargs = {
-            'stop_lvl': stop_lvl
+            'stop_lvl': stop_lvl,
+            'pe_connected_to_reduce': pe_connected_to_reduce,
+            'pe_only': pe_only,
+            'pe_in_external': pe_in_external,
+            'op': op
         }
-        return stop_lvl, cfg_kwargs
+        return (stop_lvl, pe_connected_to_reduce, pe_only, pe_in_external, op), cfg_kwargs

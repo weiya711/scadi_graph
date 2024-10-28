@@ -25,23 +25,23 @@ formatted_dir = os.getenv('SUITESPARSE_FORMATTED_PATH', default=os.path.join(cwd
     reason='CI lacks datasets',
 )
 @pytest.mark.suitesparse
-def test_mat_identity(samBench, ssname, cast, check_gold, debug_sim, report_stats, fill=0):
+def test_mat_identity(samBench, ssname, cast, positive_only, check_gold, debug_sim, report_stats, fill=0):
     B_dirname = os.path.join(formatted_dir, ssname, "mat_identity")
     B_shape_filename = os.path.join(B_dirname, "tensor_B_mode_shape")
-    B_shape = read_inputs(B_shape_filename)
+    B_shape = read_inputs(B_shape_filename, positive_only=positive_only)
 
     B0_seg_filename = os.path.join(B_dirname, "tensor_B_mode_0_seg")
-    B_seg0 = read_inputs(B0_seg_filename)
+    B_seg0 = read_inputs(B0_seg_filename, positive_only=positive_only)
     B0_crd_filename = os.path.join(B_dirname, "tensor_B_mode_0_crd")
-    B_crd0 = read_inputs(B0_crd_filename)
+    B_crd0 = read_inputs(B0_crd_filename, positive_only=positive_only)
 
     B1_seg_filename = os.path.join(B_dirname, "tensor_B_mode_1_seg")
-    B_seg1 = read_inputs(B1_seg_filename)
+    B_seg1 = read_inputs(B1_seg_filename, positive_only=positive_only)
     B1_crd_filename = os.path.join(B_dirname, "tensor_B_mode_1_crd")
-    B_crd1 = read_inputs(B1_crd_filename)
+    B_crd1 = read_inputs(B1_crd_filename, positive_only=positive_only)
 
     B_vals_filename = os.path.join(B_dirname, "tensor_B_mode_vals")
-    B_vals = read_inputs(B_vals_filename, float)
+    B_vals = read_inputs(B_vals_filename, float, positive_only=positive_only)
 
     fiberlookup_Bi_5 = CompressedCrdRdScan(crd_arr=B_crd0, seg_arr=B_seg0, debug=debug_sim, statistics=report_stats)
     fiberwrite_X0_2 = CompressWrScan(seg_size=2, size=B_shape[0], fill=fill, debug=debug_sim, statistics=report_stats)
@@ -139,5 +139,5 @@ def test_mat_identity(samBench, ssname, cast, check_gold, debug_sim, report_stat
 
     if check_gold:
         print("Checking gold...")
-        check_gold_mat_identity(ssname, debug_sim, cast, out_crds, out_segs, out_vals, "ss01")
+        check_gold_mat_identity(ssname, debug_sim, cast, positive_only, out_crds, out_segs, out_vals, "ss01")
     samBench(bench, extra_info)

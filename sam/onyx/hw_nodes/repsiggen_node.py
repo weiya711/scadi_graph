@@ -79,6 +79,7 @@ class RepSigGenNode(HWNode):
         return new_conns
 
     def configure(self, attributes):
+        print("Repeat Signal Generator", attributes)
         stop_lvl = 0
         cfg_kwargs = {
             'stop_lvl': stop_lvl

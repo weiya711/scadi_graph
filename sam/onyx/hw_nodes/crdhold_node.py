@@ -47,8 +47,6 @@ class CrdHoldNode(HWNode):
             wr_scan = other.get_name()
             conn = 0
             comment = edge.get_attributes()['comment'].strip('"')
-            print("CRDHOLD TO WR SCAN")
-            print(comment)
             if 'outer' in comment:
                 conn = 1
             new_conns = {
@@ -65,23 +63,18 @@ class CrdHoldNode(HWNode):
             # out_conn = 0
             # in_conn = 0
 
-            print(edge)
             intersect = other.get_name()
             # Use inner to process outer
-            print("CRDHOLD TO INTERSECT")
             comment = edge.get_attributes()['comment'].strip('"')
-            print(comment)
 
             label = edge.get_attributes()['label'].strip('"')
             t_label = label.split('-')[1]
-            print(t_label)
             if self.get_inner() in t_label:
                 out_conn = 0
             else:
                 out_conn = 1
 
             other_t_0 = other.get_tensor_from_connection(0)
-            print(other_t_0)
             if other_t_0 in comment:
                 in_conn = 0
             else:
@@ -108,12 +101,7 @@ class CrdHoldNode(HWNode):
             hold_outer = other.get_outer()
             hold_inner = other.get_inner()
             conn = 0
-            print(edge)
-            print("CRDHOLD TO CRDHOLD")
             comment = edge.get_attributes()['comment'].strip('"')
-            print(comment)
-            print(hold_outer)
-            print(hold_inner)
             if hold_outer in comment:
                 conn = 1
             new_conns = {
@@ -142,13 +130,10 @@ class CrdHoldNode(HWNode):
             return new_conns
 
         elif other_type == FiberAccessNode:
-            print("CRDHOLD TO FIBER ACCESS")
             assert kwargs is not None
             assert 'flavor_that' in kwargs
             that_flavor = other.get_flavor(kwargs['flavor_that'])
-            print(kwargs)
             init_conns = self.connect(that_flavor, edge)
-            print(init_conns)
             final_conns = other.remap_conns(init_conns, kwargs['flavor_that'])
             return final_conns
         else:
@@ -157,8 +142,7 @@ class CrdHoldNode(HWNode):
         return new_conns
 
     def configure(self, attributes):
-        print("CRDHOLD CONFIGURE")
-        print(attributes)
+        print("CRDHOLD Configure: ", attributes)
         cmrg_enable = 1
         # TODO what is this supposed to be?
         cmrg_stop_lvl = 1

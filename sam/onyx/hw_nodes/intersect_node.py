@@ -32,6 +32,7 @@ class IntersectNode(HWNode):
         from sam.onyx.hw_nodes.repsiggen_node import RepSigGenNode
         from sam.onyx.hw_nodes.crdhold_node import CrdHoldNode
         from sam.onyx.hw_nodes.fiberaccess_node import FiberAccessNode
+        from sam.onyx.hw_nodes.pass_through_node import PassThroughNode
 
         new_conns = None
         isect = self.get_name()
@@ -122,20 +123,12 @@ class IntersectNode(HWNode):
         elif other_type == LookupNode:
             raise NotImplementedError(f'Cannot connect IntersectNode to {other_type}')
         elif other_type == MergeNode:
-            print("INTERSECT TO MERGE")
-            print(edge)
             merge = other.get_name()
             # Use inner to process outer
             merge_outer = other.get_outer()
             merge_inner = other.get_inner()
             conn = 0
-            # print("INTERSECT TO MERGE")
-            # print(edge)
-            # print(edge.get_attributes())
             comment = edge.get_attributes()['comment'].strip('"')
-            # print(comment)
-            # print(merge_outer)
-            # print(merge_inner)
             # okay this is dumb, stopgap until we can have super consistent output
             try:
                 mapped_to_conn = comment.split("-")[1]
@@ -146,20 +139,17 @@ class IntersectNode(HWNode):
                     mapped_to_conn = comment
             if merge_outer in mapped_to_conn:
                 conn = 1
-            print(f"CONN: {conn}")
             new_conns = {
                 f'isect_to_merger_{conn}': [
                     # Send isect row and isect col to merger inside isect_col
-                    ([(isect, "coord_out"), (merge, f"cmrg_coord_in_{conn}")], 17),
+                    ([(isect, "coord_out"), (merge, f"coord_in_{conn}")], 17),
                 ]
             }
 
             return new_conns
         elif other_type == RepeatNode:
             repeat = other.get_name()
-            print("INTERSECT TO REPEAT EDGE!")
             out_conn = 0
-            print(edge)
             comment = edge.get_attributes()['comment'].strip('"')
             cmt_tnsr = comment.split("-")[1]
             assert cmt_tnsr in self.tensor_to_conn
@@ -175,9 +165,6 @@ class IntersectNode(HWNode):
             # Could be doing a sparse accum
             compute = other
             compute_name = other.get_name()
-            print("INTERSECT TO COMPUTE EDGE!")
-            print(edge)
-            print(edge.get_attributes())
             edge_comment = edge.get_attributes()['comment'].strip('"')
             tensor = edge_comment.split('-')[1]
             out_conn = self.tensor_to_conn[tensor]
@@ -185,7 +172,7 @@ class IntersectNode(HWNode):
             new_conns = {
                 'intersect_to_repeat': [
                     # send output to rd scanner
-                    ([(isect, f"pos_out_{out_conn}"), (compute_name, f"data{compute_conn}")], 17),
+                    ([(isect, f"pos_out_{out_conn}"), (compute_name, f"data{compute.mapped_input_ports[compute_conn]}")], 17),
                 ]
             }
             compute.update_input_connections()
@@ -201,7 +188,6 @@ class IntersectNode(HWNode):
             }
             return new_conns
         elif other_type == CrdHoldNode:
-            print(edge)
             crdhold = other.get_name()
             edge_comment = edge.get_attributes()['comment'].strip('"')
             if 'outer' in edge_comment:
@@ -215,16 +201,38 @@ class IntersectNode(HWNode):
             }
             return new_conns
         elif other_type == FiberAccessNode:
-            print("INTERSECT TO FIBER ACCESS")
             assert kwargs is not None
             assert 'flavor_that' in kwargs
             that_flavor = other.get_flavor(kwargs['flavor_that'])
-            print(kwargs)
             init_conns = self.connect(that_flavor, edge)
-            print(init_conns)
             final_conns = other.remap_conns(init_conns, kwargs['flavor_that'])
             return final_conns
+        elif other_type == PassThroughNode:
+            pass_through = other.get_name()
+            comment = edge.get_attributes()['comment'].strip('"')
+            try:
+                tensor = comment.split("-")[1]
+            except Exception:
+                try:
+                    tensor = comment.split("_")[1]
+                except Exception:
+                    tensor = comment
+            edge_type = edge.get_attributes()['type'].strip('"')
 
+            if 'crd' in edge_type:
+                new_conns = {
+                    f'isect_to_isect': [
+                        ([(isect, f"coord_out"), (pass_through, "stream_in")], 17),
+                    ]
+                }
+            elif 'ref' in edge_type:
+                isect_conn = self.get_connection_from_tensor(tensor)
+                new_conns = {
+                    f'isect_to_isect': [
+                        ([(isect, f"pos_out_{isect_conn}"), (pass_through, "stream_in")], 17),
+                    ]
+                }
+            return new_conns
         else:
             raise NotImplementedError(f'Cannot connect IntersectNode to {other_type}')
 
@@ -243,11 +251,18 @@ class IntersectNode(HWNode):
         return self.conn_to_tensor[conn]
 
     def configure(self, attributes):
-        # print("INTERSECT CONFIGURE")
-        # print(attributes)
+        print("INTERSECT Configure", attributes)
         cmrg_enable = 0
         cmrg_stop_lvl = 0
         type_op = attributes['type'].strip('"')
+
+        if 'vector_reduce_mode' in attributes:
+            is_in_vr_mode = attributes['vector_reduce_mode'].strip('"')
+            if is_in_vr_mode == "true":
+                vr_mode = 1
+        else:
+            vr_mode = 0
+
         if type_op == "intersect":
             op = JoinerOp.INTERSECT.value
         elif type_op == "union":
@@ -257,6 +272,7 @@ class IntersectNode(HWNode):
         cfg_kwargs = {
             'cmrg_enable': cmrg_enable,
             'cmrg_stop_lvl': cmrg_stop_lvl,
-            'op': op
+            'op': op,
+            'vr_mode': vr_mode
         }
-        return (cmrg_enable, cmrg_stop_lvl, op), cfg_kwargs
+        return (cmrg_enable, cmrg_stop_lvl, op, vr_mode), cfg_kwargs

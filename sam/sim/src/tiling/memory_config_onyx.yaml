@@ -15,5 +15,5 @@ Bytes_per_element: 2 # Number
 n_levels: 3
 level_names: ["Main", "Glb", "Mem"]
 Main_tile_size: None
-Glb_tile_size: 16 # 16 # 120 # n = (nxn) elements
-Mem_tile_size: 128 # Size of one dense dimension. 8 = (8x8) 
+Glb_tile_size: 8 # 8 = (8x8) = 64 elements
+Mem_tile_size: 30

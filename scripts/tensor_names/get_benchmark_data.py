@@ -6,19 +6,19 @@ def get_matrix_indices(seed, n=5):
     random.seed(seed)
     matrices = []
     with open('suitesparse_valid_small50.txt', 'r') as small50:
-        randlist = [random.randint(0, 49) for x in range(n)]
+        randlist = random.sample(range(50), n)
         print(randlist)
         lines = small50.read().splitlines()
         chosen_matrices = [lines[i] for i in randlist]
         matrices += chosen_matrices
     with open('suitesparse_valid_mid50.txt', 'r') as mid50:
-        randlist = [random.randint(0, 49) for x in range(n)]
+        randlist = random.sample(range(50), n)
         print(randlist)
         lines = mid50.read().splitlines()
         chosen_matrices = [lines[i] for i in randlist]
         matrices += chosen_matrices
     with open('suitesparse_valid_large50.txt', 'r') as large50:
-        randlist = [random.randint(0, 49) for x in range(n)]
+        randlist = random.sample(range(50), n)
         print(randlist)
         lines = large50.read().splitlines()
         chosen_matrices = [lines[i] for i in randlist]

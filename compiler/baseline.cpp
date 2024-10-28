@@ -315,7 +315,8 @@ enum SuiteSparseOp {
     SDDMM = 4,
     MATTRANSMUL = 5,
     RESIDUAL = 6,
-    MMADD = 7
+    MMADD = 7,
+    MMMUL = 8
 };
 
 std::string opName(SuiteSparseOp op) {
@@ -341,6 +342,9 @@ std::string opName(SuiteSparseOp op) {
         case MMADD: {
             return "mmadd";
         }
+	case MMMUL: {
+	    return "mmmul"
+	}
         default:
             return "";
     }
@@ -467,6 +471,13 @@ static void bench_suitesparse(benchmark::State &state, SuiteSparseOp op, int fil
                 result(i, j) = ssTensor(i, j) + otherShifted(i, j);
                 break;
             }
+            case MMMUL: {
+                result = Tensor<int64_t>("result", ssTensor.getDimensions(), ssTensor.getFormat(), fill_value);
+
+                IndexVar i, j, k;
+                result(i, j) = ssTensor(i, j) * otherShifted(i, j);
+                break;
+            }
             case MATTRANSMUL: {
                 result = Tensor<int64_t>("result", {DIM1}, Format(Sparse), fill_value);
 
@@ -516,4 +527,5 @@ static void bench_suitesparse(benchmark::State &state, SuiteSparseOp op, int fil
     // TODO: need to fix for DCSC for this
     TACO_BENCH_ARGS(bench_suitesparse, mat_mattransmul, MATTRANSMUL);
     TACO_BENCH_ARGS(bench_suitesparse, matmul_spmm, SPMM);
+    TACO_BENCH_ARGS(bench_suitesparse, mat_elemmul, MMMUL);
 

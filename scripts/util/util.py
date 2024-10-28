@@ -496,7 +496,7 @@ class FormatWriter:
             else:
                 filename = os.path.join(vec_dir, "tensor_" + tensorname + "_mode_0_seg")
             with open(filename, "w") as ofile:
-                ofile.write(array_newline_str([0, len(vec_sp) + 1]))
+                ofile.write(array_newline_str([0, len(vec_sp)]))
 
             if not hw:
                 filename = os.path.join(vec_dir, tensorname + "0_crd.txt")

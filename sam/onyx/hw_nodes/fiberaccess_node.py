@@ -48,7 +48,7 @@ class FiberAccessNode(HWNode):
 
         for conn_set_name, conn_list in conns.items():
             # remapped_conns[conn_set_name]
-            print(f"remapping {conn_set_name}: {conn_list}")
+            # print(f"remapping {conn_set_name}: {conn_list}")
             tmp_list_conns = []
             for conn_item in conn_list:
                 conns, size = conn_item
@@ -82,6 +82,8 @@ class FiberAccessNode(HWNode):
         from sam.onyx.hw_nodes.repsiggen_node import RepSigGenNode
         from sam.onyx.hw_nodes.merge_node import MergeNode
         from sam.onyx.hw_nodes.crdhold_node import CrdHoldNode
+        from sam.onyx.hw_nodes.stream_arbiter_node import StreamArbiterNode
+        from sam.onyx.hw_nodes.pass_through_node import PassThroughNode
 
         new_conns = None
         other_type = type(other)
@@ -91,10 +93,7 @@ class FiberAccessNode(HWNode):
             assert kwargs is not None
             assert 'flavor_this' in kwargs
             this_flavor = self.get_flavor(kwargs['flavor_this'])
-            print(kwargs)
-            print("FIBER ACCESS TO GLB")
             init_conns = this_flavor.connect(other, edge)
-            print(init_conns)
             final_conns = self.remap_conns(init_conns, kwargs['flavor_this'])
             return final_conns
 
@@ -109,10 +108,7 @@ class FiberAccessNode(HWNode):
             assert kwargs is not None
             assert 'flavor_this' in kwargs
             this_flavor = self.get_flavor(kwargs['flavor_this'])
-            print(kwargs)
-            print("FIBER ACCESS TO WRITE SCANNER")
             init_conns = this_flavor.connect(other, edge)
-            print(init_conns)
             final_conns = self.remap_conns(init_conns, kwargs['flavor_this'])
             return final_conns
 
@@ -121,10 +117,7 @@ class FiberAccessNode(HWNode):
             assert kwargs is not None
             assert 'flavor_this' in kwargs
             this_flavor = self.get_flavor(kwargs['flavor_this'])
-            print(kwargs)
-            print("FIBER ACCESS TO INTERSECT")
             init_conns = this_flavor.connect(other, edge)
-            print(init_conns)
             final_conns = self.remap_conns(init_conns, kwargs['flavor_this'])
             return final_conns
 
@@ -133,10 +126,7 @@ class FiberAccessNode(HWNode):
             assert kwargs is not None
             assert 'flavor_this' in kwargs
             this_flavor = self.get_flavor(kwargs['flavor_this'])
-            print(kwargs)
-            print("FIBER ACCESS TO Crd Hold")
             init_conns = this_flavor.connect(other, edge)
-            print(init_conns)
             final_conns = self.remap_conns(init_conns, kwargs['flavor_this'])
             return final_conns
 
@@ -147,10 +137,7 @@ class FiberAccessNode(HWNode):
             assert kwargs is not None
             assert 'flavor_this' in kwargs
             this_flavor = self.get_flavor(kwargs['flavor_this'])
-            print(kwargs)
-            print("FIBER ACCESS TO Crd Hold")
             init_conns = this_flavor.connect(other, edge)
-            print(init_conns)
             final_conns = self.remap_conns(init_conns, kwargs['flavor_this'])
             return final_conns
 
@@ -159,10 +146,7 @@ class FiberAccessNode(HWNode):
             assert kwargs is not None
             assert 'flavor_this' in kwargs
             this_flavor = self.get_flavor(kwargs['flavor_this'])
-            print(kwargs)
-            print("FIBER ACCESS TO Crd Hold")
             init_conns = this_flavor.connect(other, edge)
-            print(init_conns)
             final_conns = self.remap_conns(init_conns, kwargs['flavor_this'])
             return final_conns
 
@@ -171,10 +155,7 @@ class FiberAccessNode(HWNode):
             assert kwargs is not None
             assert 'flavor_this' in kwargs
             this_flavor = self.get_flavor(kwargs['flavor_this'])
-            print(kwargs)
-            print("FIBER ACCESS TO Crd Hold")
             init_conns = this_flavor.connect(other, edge)
-            print(init_conns)
             final_conns = self.remap_conns(init_conns, kwargs['flavor_this'])
             return final_conns
 
@@ -183,10 +164,7 @@ class FiberAccessNode(HWNode):
             assert kwargs is not None
             assert 'flavor_this' in kwargs
             this_flavor = self.get_flavor(kwargs['flavor_this'])
-            print(kwargs)
-            print("FIBER ACCESS TO WRITE SCANNER")
             init_conns = this_flavor.connect(other, edge)
-            print(init_conns)
             final_conns = self.remap_conns(init_conns, kwargs['flavor_this'])
             return final_conns
 
@@ -197,10 +175,7 @@ class FiberAccessNode(HWNode):
             assert kwargs is not None
             assert 'flavor_this' in kwargs
             this_flavor = self.get_flavor(kwargs['flavor_this'])
-            print(kwargs)
-            print("FIBER ACCESS TO Crd Hold")
             init_conns = this_flavor.connect(other, edge)
-            print(init_conns)
             final_conns = self.remap_conns(init_conns, kwargs['flavor_this'])
             return final_conns
 
@@ -211,22 +186,38 @@ class FiberAccessNode(HWNode):
             assert 'flavor_that' in kwargs
             this_flavor = self.get_flavor(kwargs['flavor_this'])
             that_flavor = other.get_flavor(kwargs['flavor_that'])
-            print(kwargs)
-            print("FIBER ACCESS TO FIBER ACCESS")
             init_conns = this_flavor.connect(that_flavor, edge)
-            print(init_conns)
             final_conns_1 = self.remap_conns(init_conns, kwargs['flavor_this'])
             final_conns_2 = other.remap_conns(final_conns_1, kwargs['flavor_that'])
-            print(final_conns_2)
             return final_conns_2
+        elif other_type == StreamArbiterNode:
+            assert kwargs is not None
+            assert 'flavor_this' in kwargs
+            this_flavor = self.get_flavor(kwargs['flavor_this'])
+            init_conns = this_flavor.connect(other, edge)
+            final_conns = self.remap_conns(init_conns, kwargs['flavor_this'])
+            return final_conns
+        elif other_type == PassThroughNode:
+            assert kwargs is not None
+            assert 'flavor_this' in kwargs
+            this_flavor = self.get_flavor(kwargs['flavor_this'])
+            init_conns = this_flavor.connect(other, edge)
+            final_conns = self.remap_conns(init_conns, kwargs['flavor_this'])
+            return final_conns
         else:
             raise NotImplementedError(f'Cannot connect FiberAccessNode to {other_type}')
 
         return new_conns
 
     def configure(self, attributes, flavor):
+        print("Fiber Access Configure: ", attributes)
 
         cfg_tuple, cfg_kwargs = self.get_flavor(flavor=flavor).configure(attributes)
         cfg_kwargs['flavor'] = flavor
+        # breakpoint()
+
+        # vr_mode = 0
+        # cfg_tuple += (vr_mode,)
+        # cfg_kwargs["vr_mode"] = vr_mode
 
         return cfg_tuple, cfg_kwargs
