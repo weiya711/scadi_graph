@@ -88,8 +88,11 @@ class MatrixGenerator:
         # self.fiber_tree = FiberTree(tensor=self.array if self.block_naive else self.array[...,
                                     # self.shape[-2]:self.block_size,:self.shape[-1]:self.block_size])
         self.fiber_tree = FiberTree(tensor=self.array)
-        self.tmp_fiber_tree = FiberTree(tensor=self.array[..., :self.shape[-2]:self.block_size,
-                                        :self.shape[-1]:self.block_size])
+        if len(self.shape) > 1:
+            self.tmp_fiber_tree = FiberTree(tensor=self.array[..., :self.shape[-2]:self.block_size,
+                                            :self.shape[-1]:self.block_size])
+        else:
+            self.tmp_fiber_tree = FiberTree(tensor=self.array)
 
     def transpose_tensor(self, axes=None):
         '''
