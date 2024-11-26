@@ -64,7 +64,7 @@ class MatrixGenerator:
         '''
         Routine to create the actual matrix from the dimension/shape
         '''
-        self.array = numpy.random.uniform(low=-1 * value_cap / 2, high=value_cap / 2, size=self.shape)
+        self.array = numpy.random.uniform(low=-2, high=2, size=self.shape)
         # convert to float32 for ease of conversion to bfloat16
         self.array = self.array.astype(numpy.float32)
         if not self.use_fp:

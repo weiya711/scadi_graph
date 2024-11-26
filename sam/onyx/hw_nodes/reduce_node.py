@@ -72,13 +72,24 @@ class ReduceNode(HWNode):
             raise NotImplementedError(f'Cannot connect ReduceNode to {other_type}')
         elif other_type == ComputeNode:
             pe = other.get_name()
-            other_conn = other.mapped_input_ports[other.get_num_inputs()]
-            new_conns = {
-                f'reduce_to_pe_{other_conn}': [
-                    ([(red, "reduce_data_out"), (pe, f"data{other_conn}")], 17),
-                ]
-            }
-            other.update_input_connections()
+            edge_attr = edge.get_attributes()
+            if "specified_port" in edge_attr and edge_attr["specified_port"] is not None:
+                other_conn = edge_attr["specified_port"]
+                other.mapped_input_ports.append(other_conn.strip("data"))
+                new_conns = {
+                    f'reduce_to_pe_{other_conn}': [
+                        ([(red, "reduce_data_out"), (pe, f"{other_conn}")], 17),
+                    ]
+                }  
+            else:
+                other_conn = other.mapped_input_ports[other.get_num_inputs()]
+                new_conns = {
+                    f'reduce_to_pe_{other_conn}': [
+                        ([(red, "reduce_data_out"), (pe, f"data{other_conn}")], 17),
+                    ]
+                }
+                other.update_input_connections()
+            
             return new_conns
         elif other_type == BroadcastNode:
             raise NotImplementedError(f'Cannot connect ReduceNode to {other_type}')
