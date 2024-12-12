@@ -490,7 +490,8 @@ def create_matrix_from_point_list(name, pt_list, shape, use_fp=False, base=16) -
     else:
         mat_base = mat_base.astype(numpy.uint16, casting='unsafe')
 
-    mg = MatrixGenerator(name=f"{name}", shape=shape, sparsity=0.7, format='CSF', dump_dir=None, tensor=mat_base, use_fp=use_fp)
+    mg = MatrixGenerator(name=f"{name}", shape=shape, sparsity=0.7, format='CSF', 
+                         dump_dir=None, tensor=mat_base, use_fp=use_fp)
     return mg
 
 
