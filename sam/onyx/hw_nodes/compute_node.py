@@ -214,22 +214,22 @@ class ComputeNode(HWNode):
         comment = attributes['comment'].strip('"')
         op_code = 0
         # configuring via sam, it is a sparse app
-        use_dense = False
+        bypass_rv = False
         # mapping to pe only, configuring only the pe, ignore the reduce
         pe_only = True
         # data I/O should interface with other primitive outside of the cluster
         pe_in_external = 1
         # according to the mapped input ports generate input port config
-        num_sparse_inputs = list("000")
+        active_inputs = list("000")
         for port in self.mapped_input_ports:
-            num_sparse_inputs[2 - int(port)] = '1'
-        num_sparse_inputs = int("".join(num_sparse_inputs), 2)
+            active_inputs[2 - int(port)] = '1'
+        active_inputs = int("".join(active_inputs), 2)
 
         cfg_kwargs = {
             'op': self.opcode,
-            'use_dense': use_dense,
+            'bypass_rv': bypass_rv,
             'pe_only': pe_only,
             'pe_in_external': pe_in_external,
-            'num_sparse_inputs': num_sparse_inputs
+            'active_inputs': active_inputs
         }
-        return (op_code, use_dense, pe_only, pe_in_external, num_sparse_inputs), cfg_kwargs
+        return (op_code, bypass_rv, pe_only, pe_in_external, active_inputs), cfg_kwargs
